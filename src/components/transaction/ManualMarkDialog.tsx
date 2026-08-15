@@ -63,7 +63,7 @@ export function ManualMarkDialog({
             <div className="rounded-md bg-slate-50 p-3 text-sm">
               <div>流水号 {record.transaction.transactionNo}</div>
               <div className="mt-1 text-muted">
-                {record.transaction.platform} · {record.transaction.account || "—"} · {formatMoney(record.transaction.amount, record.transaction.currency)}
+                {record.transaction.entityName || "—"} · {record.transaction.platform} · {record.transaction.account || "—"} · {formatMoney(record.transaction.amount, record.transaction.currency)}
               </div>
               <div className="mt-1">当前科目：{formatSubjectPath(record.final.subject)}</div>
             </div>

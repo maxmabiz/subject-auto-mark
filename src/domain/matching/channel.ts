@@ -143,7 +143,7 @@ export function matchChannelRules(
   }
 
   if (errors.length > 0) {
-    return emptyResult("data_error", `数据异常：${errors.join("、")}`, errors);
+    return emptyResult("data_error", `无法匹配：${errors.join("、")}`, errors);
   }
 
   const scopedRules = platformRules.filter(
@@ -158,7 +158,7 @@ export function matchChannelRules(
   const emptyRequired = applicableFields.filter((field) => !fieldHasValue(field));
   if (scopedRules.length > 0 && applicableFields.every((field) => !fieldHasValue(field))) {
     missingFieldErrors.push(`缺少规则所需字段：${emptyRequired.join("、")}`);
-    return emptyResult("data_error", `数据异常：${missingFieldErrors.join("、")}`, missingFieldErrors);
+    return emptyResult("data_error", `无法匹配：${missingFieldErrors.join("、")}`, missingFieldErrors);
   }
 
   const candidates = scopedRules

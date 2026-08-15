@@ -46,6 +46,11 @@ export interface Transaction {
   paymentGateway: string;
   transactionType: string;
   feishuApprovalId: string;
+  entityName: string;
+  transactionId: string;
+  billNo: string;
+  channelStatus: string;
+  accountingType: string;
 }
 
 export interface Rule {

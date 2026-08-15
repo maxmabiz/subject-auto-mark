@@ -43,13 +43,18 @@ export function TransactionDrawer({
             <section>
               <h4 className="mb-3 text-sm font-semibold">原始流水信息</h4>
               <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border border-slate-200 p-4">
-                <Field label="流水号" value={dash(tx.transactionNo)} />
+                <Field label="主体名称" value={dash(tx.entityName)} />
+                <Field label="账户号" value={dash(tx.account)} />
                 <Field label="平台" value={dash(tx.platform)} />
-                <Field label="账号" value={dash(tx.account)} />
-                <Field label="流水时间" value={formatDateTime(tx.transactionTime)} />
+                <Field label="发生日期" value={formatDateTime(tx.transactionTime)} />
+                <Field label="交易ID" value={dash(tx.transactionId)} />
+                <Field label="账单号" value={dash(tx.billNo)} />
+                <Field label="流水号" value={dash(tx.transactionNo)} />
+                <Field label="状态" value={dash(tx.channelStatus)} />
+                <Field label="记账类型" value={dash(tx.accountingType)} />
                 <Field label="收支方向" value={DIRECTION_LABEL[tx.direction]} />
                 <Field label="金额和币种" value={formatMoney(tx.amount, tx.currency)} />
-                <Field label="交易描述" value={dash(tx.transactionDescription)} />
+                <Field label="交易信息" value={dash(tx.transactionDescription)} />
                 <Field label="备注" value={dash(tx.note)} />
                 <Field label="业务类型" value={dash(tx.businessType)} />
                 <Field label="code 类型" value={dash(tx.codeType)} />

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, BarChart, Bar, CartesianGrid } from "recharts";
-import { AlertTriangle, CircleSlash, ShieldAlert } from "lucide-react";
+import { CircleSlash, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { displayPlatform, SOURCE_LABEL } from "@/domain/constants";
+import { displayPlatform, SOURCE_LABEL, toDisplayStatus } from "@/domain/constants";
 import { formatPercent } from "@/lib/format";
 import { useAppStore } from "@/store/AppStore";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
@@ -23,9 +23,8 @@ export function OverviewPage() {
     const total = records.length;
     const marked = records.filter((item) => item.final.subject).length;
     const auto = records.filter((item) => item.final.source === "channel" || item.final.source === "feishu").length;
-    const unmatched = records.filter((item) => item.final.status === "unmatched").length;
-    const conflict = records.filter((item) => item.final.status === "rule_conflict").length;
-    const dataError = records.filter((item) => item.final.status === "data_error").length;
+    const unmatched = records.filter((item) => toDisplayStatus(item.final.status) === "unmatched").length;
+    const unmatchable = records.filter((item) => toDisplayStatus(item.final.status) === "unmatchable").length;
     const manual = records.filter((item) => item.final.source === "manual").length;
     const autoMarked = records.filter((item) => item.final.source === "channel" || item.final.source === "feishu" || item.final.source === "manual").length;
     return {
@@ -33,8 +32,7 @@ export function OverviewPage() {
       marked,
       autoCoverage: total ? auto / total : 0,
       unmatched,
-      conflict,
-      dataError,
+      unmatchable,
       manualRate: autoMarked ? manual / autoMarked : 0,
       source: [
         { name: SOURCE_LABEL.manual, key: "manual", value: records.filter((item) => item.final.source === "manual").length },
@@ -89,7 +87,7 @@ export function OverviewPage() {
     { label: "已标记流水数", value: stats.marked.toLocaleString() },
     { label: "自动匹配覆盖率", value: formatPercent(stats.autoCoverage) },
     { label: "未匹配数", value: String(stats.unmatched), tone: "slate" },
-    { label: "规则冲突数", value: String(stats.conflict), tone: "orange" },
+    { label: "无法匹配数", value: String(stats.unmatchable), tone: "red" },
     { label: "人工修改率", value: formatPercent(stats.manualRate) },
   ];
 
@@ -109,23 +107,17 @@ export function OverviewPage() {
           </Card>
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {[{
           key: "unmatched",
           label: "未匹配",
           count: stats.unmatched,
           icon: CircleSlash,
-          desc: "没有任何规则命中，需人工确认科目",
+          desc: "无规则命中，或命中规则指向不同科目，需人工确认",
         }, {
-          key: "conflict",
-          label: "规则冲突",
-          count: stats.conflict,
-          icon: AlertTriangle,
-          desc: "最高优先级规则指向不同科目",
-        }, {
-          key: "error",
-          label: "数据异常",
-          count: stats.dataError,
+          key: "unmatchable",
+          label: "无法匹配",
+          count: stats.unmatchable,
           icon: ShieldAlert,
           desc: "缺少平台、账号或规则所需字段",
         }].map((item) => (

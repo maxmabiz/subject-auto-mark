@@ -14,7 +14,7 @@ function at(day: number, hour: number, minute = 0): string {
 }
 
 function base(partial: Partial<Transaction> & Pick<Transaction, "id" | "transactionNo" | "platform" | "account">): Transaction {
-  return {
+  const filled: Transaction = {
     transactionTime: at(10, 10),
     amount: 1280,
     currency: "USD",
@@ -27,8 +27,41 @@ function base(partial: Partial<Transaction> & Pick<Transaction, "id" | "transact
     paymentGateway: "",
     transactionType: "",
     feishuApprovalId: "",
+    entityName: "",
+    transactionId: "",
+    billNo: "",
+    channelStatus: "",
+    accountingType: "",
     ...partial,
   };
+  return {
+    ...filled,
+    entityName: filled.entityName || inferEntityName(filled.account, filled.platform),
+    transactionId: filled.transactionId || filled.transactionNo,
+    billNo: filled.billNo,
+    channelStatus: filled.channelStatus || inferChannelStatus(filled),
+    accountingType: filled.accountingType || "交易",
+  };
+}
+
+function inferEntityName(account: string, platform: string): string {
+  const text = `${account} ${platform}`.toLowerCase();
+  if (text.includes("muxue")) return "Muxue";
+  if (text.includes("besttech") || text.includes("bst")) return "Besttech";
+  if (text.includes("luzhennan")) return "Luzhennan";
+  if (text.includes("bywise")) return "Bywise";
+  if (text.includes("hqy") || text.includes("fleck") || text.includes("nksea") || text.includes("44414")) return "HQY";
+  return platform ? "HQY" : "";
+}
+
+function inferChannelStatus(tx: Transaction): string {
+  if (tx.codeType) return tx.codeType;
+  if (tx.businessType) return tx.businessType;
+  if (tx.transactionType) return tx.transactionType;
+  const platform = tx.platform.toLowerCase();
+  if (platform.includes("airwallex") && tx.direction === "in") return "DC_CREDIT";
+  if (tx.direction === "in") return "DEPOSIT";
+  return "TRANSFER";
 }
 
 const software = FEISHU_APPROVAL_TYPES[0];
@@ -583,6 +616,10 @@ export function createSeedRecords(): {
 
   return [...records, ...extras].map((record) => ({
     ...record,
+    transaction: {
+      ...record.transaction,
+      billNo: record.transaction.billNo || record.transaction.feishuApprovalId,
+    },
     feishu: record.feishu
       ? { ...record.feishu, transactionNo: record.transaction.transactionNo }
       : null,

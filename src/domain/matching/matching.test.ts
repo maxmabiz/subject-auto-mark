@@ -21,6 +21,11 @@ function tx(partial: Partial<Transaction> & Pick<Transaction, "id">): Transactio
     paymentGateway: "",
     transactionType: "",
     feishuApprovalId: "",
+    entityName: "HQY",
+    transactionId: partial.transactionNo ?? `NO-${partial.id}`,
+    billNo: "",
+    channelStatus: "DEPOSIT",
+    accountingType: "交易",
     ...partial,
   };
 }

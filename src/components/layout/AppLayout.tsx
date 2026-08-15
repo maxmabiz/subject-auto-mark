@@ -1,14 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BookOpen, LayoutDashboard, ListChecks, ShieldAlert } from "lucide-react";
+import { BookOpen, ListChecks } from "lucide-react";
 import { CURRENT_USER, PRODUCT_NAME } from "@/domain/constants";
 import { useAppStore } from "@/store/AppStore";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/", label: "数据概览", icon: LayoutDashboard },
   { to: "/transactions", label: "流水列表", icon: ListChecks },
-  { to: "/exceptions", label: "异常待处理", icon: ShieldAlert },
   { to: "/rules", label: "规则管理", icon: BookOpen },
 ];
 
@@ -27,7 +25,7 @@ export function AppLayout() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === "/"}
+              end={item.to === "/transactions"}
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-2 rounded-md px-3 py-2 text-sm text-white/80 hover:bg-white/10",

@@ -1,8 +1,8 @@
-import type { ParsedExcelRow } from "./types";
+import type { MatchStatus, ParsedExcelRow } from "./types";
 
 export const CURRENT_USER = "财务管理员";
 export const PRODUCT_NAME = "流水科目自动标记";
-export const STORAGE_KEY = "subject-auto-mark-v2";
+export const STORAGE_KEY = "subject-auto-mark-v3";
 export const TEMPLATE_PATH = "/templates/科目匹配规则-原始配置.xlsx";
 
 export const PLATFORMS = [
@@ -54,13 +54,48 @@ export const FEISHU_APPROVAL_TYPES = [
 
 export const EXTRA_SUBJECTS = FEISHU_APPROVAL_TYPES.map((item) => item.subject);
 
+/** 列表/筛选展示状态。引擎内部仍保留 rule_conflict / data_error。 */
+export type DisplayMatchStatus =
+  | "auto_matched"
+  | "feishu_matched"
+  | "manual_marked"
+  | "unmatched"
+  | "unmatchable";
+
+export function toDisplayStatus(status: MatchStatus): DisplayMatchStatus {
+  if (status === "rule_conflict") return "unmatched";
+  if (status === "data_error") return "unmatchable";
+  return status;
+}
+
+export function matchesDisplayStatus(status: MatchStatus, display: string): boolean {
+  if (display === "all") return true;
+  return toDisplayStatus(status) === display;
+}
+
+export const DISPLAY_STATUS_LABEL: Record<DisplayMatchStatus, string> = {
+  auto_matched: "自动匹配",
+  feishu_matched: "飞书审批",
+  manual_marked: "人工标记",
+  unmatched: "未匹配",
+  unmatchable: "无法匹配",
+};
+
+export const DISPLAY_STATUS_OPTIONS: { value: DisplayMatchStatus; label: string }[] = [
+  { value: "auto_matched", label: "自动匹配" },
+  { value: "feishu_matched", label: "飞书审批" },
+  { value: "manual_marked", label: "人工标记" },
+  { value: "unmatched", label: "未匹配" },
+  { value: "unmatchable", label: "无法匹配" },
+];
+
 export const STATUS_LABEL: Record<string, string> = {
   auto_matched: "自动匹配",
   feishu_matched: "飞书审批",
   manual_marked: "人工标记",
   unmatched: "未匹配",
-  rule_conflict: "规则冲突",
-  data_error: "数据异常",
+  rule_conflict: "未匹配",
+  data_error: "无法匹配",
 };
 
 export const SOURCE_LABEL: Record<string, string> = {
