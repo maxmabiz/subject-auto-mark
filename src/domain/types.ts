@@ -51,6 +51,13 @@ export interface Transaction {
   billNo: string;
   channelStatus: string;
   accountingType: string;
+  accountName: string;
+  incomeItem: string;
+  counterpartyAccount: string;
+  availableBalance: number | null;
+  fee: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Rule {
@@ -67,6 +74,9 @@ export interface Rule {
   errors: string[];
   warnings: string[];
   version: string;
+  createdAt: string;
+  updatedAt: string;
+  matchedCountT1: number;
 }
 
 export interface RuleVersion {
@@ -89,11 +99,47 @@ export interface RuleVersion {
 
 export interface FeishuApprovalResult {
   approvalId: string;
-  approvalType: string;
+  approvalName: string;
+  templateId: string;
+  paymentType: string;
   transactionNo: string;
-  subject: SubjectPath;
   matchedAt: string;
 }
+
+export interface ApprovalRule {
+  id: string;
+  excelRow: number;
+  seq: string;
+  approvalName: string;
+  templateId: string;
+  paymentType: string;
+  subject: SubjectPath | null;
+  validationStatus: RuleValidationStatus;
+  errors: string[];
+  createdAt: string;
+  updatedAt: string;
+  matchedCountT1: number;
+}
+
+export type ApprovalRuleLogAction = "create" | "update" | "delete" | "import";
+
+export interface ApprovalRuleChange {
+  field: string;
+  from: string;
+  to: string;
+}
+
+export interface ApprovalRuleLog {
+  id: string;
+  ruleId: string;
+  time: string;
+  actor: string;
+  action: ApprovalRuleLogAction;
+  summary: string;
+  changes: ApprovalRuleChange[];
+}
+
+export type ChannelRuleLog = ApprovalRuleLog;
 
 export interface ManualMark {
   subject: SubjectPath;

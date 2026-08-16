@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertDialog, AlertDialogContent } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,12 +13,11 @@ import { dash, formatDateTime, formatMoney } from "@/lib/format";
 import { useAppStore } from "@/store/AppStore";
 
 export function ExceptionsPage() {
-  const { loading, error, records, unlockManual } = useAppStore();
+  const { loading, error, records } = useAppStore();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") === "unmatchable" || params.get("tab") === "error" ? "unmatchable" : "unmatched";
   const [detailId, setDetailId] = useState<string | null>(null);
   const [manualId, setManualId] = useState<string | null>(null);
-  const [unlockId, setUnlockId] = useState<string | null>(null);
 
   const groups = useMemo(() => ({
     unmatched: records.filter((item) => item.final.status === "unmatched" || item.final.status === "rule_conflict"),
@@ -71,20 +69,8 @@ export function ExceptionsPage() {
         open={Boolean(detail)}
         onOpenChange={(open) => { if (!open) setDetailId(null); }}
         onManual={() => { if (detail) setManualId(detail.transaction.id); }}
-        onUnlock={() => { if (detail) setUnlockId(detail.transaction.id); }}
       />
       <ManualMarkDialog record={manual} open={Boolean(manual)} onOpenChange={(open) => { if (!open) setManualId(null); }} />
-      <AlertDialog open={Boolean(unlockId)} onOpenChange={(open) => { if (!open) setUnlockId(null); }}>
-        <AlertDialogContent
-          title="确认解除人工锁定？"
-            description="解除后将重新按飞书优先、渠道规则其次计算最终科目。飞书审批不会失效；若科目仍不正确，请继续使用人工标记。"
-          confirmText="解除锁定"
-          onConfirm={() => {
-            if (unlockId) unlockManual(unlockId);
-            setUnlockId(null);
-          }}
-        />
-      </AlertDialog>
     </div>
   );
 }
@@ -102,15 +88,15 @@ function ExceptionTable({
   onManual: (id: string) => void;
   extra: (record: EnrichedTransaction) => string;
 }) {
-  if (!records.length) return <EmptyState title={empty} description="可返回流水列表查看已标记结果。" />;
+  if (!records.length) return <EmptyState title={empty} description="可返回收付流水查看已标记结果。" />;
   return (
     <Card className="overflow-hidden">
       <table className="w-full text-left text-sm">
         <thead className="bg-slate-50 text-xs text-slate-600">
           <tr>
-            <th className="px-3 py-3">流水号</th>
+            <th className="px-3 py-3">交易号</th>
             <th>时间</th>
-            <th>平台 / 账号</th>
+            <th>收款机构 / 账号</th>
             <th>金额</th>
             <th>关键字段 / 原因</th>
             <th>状态</th>
@@ -120,7 +106,7 @@ function ExceptionTable({
         <tbody>
           {records.map((record) => (
             <tr key={record.transaction.id} className="border-t border-slate-100">
-              <td className="px-3 py-2.5">{record.transaction.transactionNo}</td>
+              <td className="px-3 py-2.5">{record.transaction.transactionId || record.transaction.transactionNo}</td>
               <td>{formatDateTime(record.transaction.transactionTime)}</td>
               <td>{displayPlatform(record.transaction.platform)} / {dash(record.transaction.account)}</td>
               <td>{formatMoney(record.transaction.amount, record.transaction.currency)}</td>

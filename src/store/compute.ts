@@ -1,4 +1,5 @@
 import type {
+  ApprovalRule,
   AuditLog,
   ChannelRuleResult,
   EnrichedTransaction,
@@ -18,6 +19,7 @@ export function computeFinal(input: {
   transaction: Transaction;
   manual: ManualMark | null;
   feishu: FeishuApprovalResult | null;
+  approvalRules: ApprovalRule[];
   channel: ChannelRuleResult;
   ruleVersion: string | null;
   updatedAt?: string;
@@ -33,6 +35,7 @@ export function enrichOne(
   manual: ManualMark | null,
   feishu: FeishuApprovalResult | null,
   rules: Rule[],
+  approvalRules: ApprovalRule[],
   ruleVersion: string,
   existing?: { channel?: ChannelRuleResult; final?: FinalMatchResult },
   recompute = true,
@@ -44,6 +47,7 @@ export function enrichOne(
           transaction,
           manual,
           feishu,
+          approvalRules,
           channel,
           ruleVersion,
         })
@@ -62,4 +66,8 @@ export function appendLog(
     },
     ...logs,
   ];
+}
+
+export function isApprovalRuleInUse(records: EnrichedTransaction[], ruleId: string): boolean {
+  return records.some((item) => item.final.source === "feishu" && item.final.matchedRuleId === ruleId);
 }

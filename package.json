@@ -1,8 +1,9 @@
 {
   "name": "subject-auto-mark",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
+  "homepage": "https://maxmabiz.github.io/subject-auto-mark/",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

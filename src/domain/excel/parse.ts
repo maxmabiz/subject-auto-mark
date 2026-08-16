@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import type { ExcelParseResult, ParsedExcelRow } from "../types";
 import { cellToString } from "../matching/normalize";
+import { mockAccount } from "../channel/accounts";
 
 const REQUIRED_COLUMNS = [
   "平台",
@@ -87,7 +88,7 @@ export function parseRuleWorkbook(buffer: ArrayBuffer, meta: {
     rows.push({
       excelRow: r + 1,
       platform,
-      account,
+      account: mockAccount(account),
       searchField,
       keyword,
       level1,

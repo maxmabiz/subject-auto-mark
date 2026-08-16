@@ -11,4 +11,5 @@ export {
 } from "./fieldMap";
 export { matchChannelRules } from "./channel";
 export { matchFeishuByTransactionNo } from "./feishu";
+export { resolveFeishuMatch } from "../approval/match";
 export { decideFinalResult, rematchTransaction } from "./decide";

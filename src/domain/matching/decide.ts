@@ -1,4 +1,5 @@
 import type {
+  ApprovalRule,
   ChannelRuleResult,
   FeishuApprovalResult,
   FinalMatchResult,
@@ -7,20 +8,21 @@ import type {
   MatchStatus,
   Transaction,
 } from "../types";
-import { matchFeishuByTransactionNo } from "./feishu";
+import { resolveFeishuMatch } from "../approval/match";
 import { formatSubject } from "./normalize";
 
 export function decideFinalResult(input: {
   transaction: Transaction;
   manual: ManualMark | null;
   feishu: FeishuApprovalResult | null;
+  approvalRules: ApprovalRule[];
   channel: ChannelRuleResult;
   ruleVersion: string | null;
   updatedAt: string;
 }): FinalMatchResult {
-  const { transaction, manual, feishu, channel, ruleVersion, updatedAt } = input;
+  const { transaction, manual, feishu, approvalRules, channel, ruleVersion, updatedAt } = input;
 
-  if (manual?.locked) {
+  if (manual) {
     return {
       transactionId: transaction.id,
       status: "manual_marked",
@@ -33,27 +35,29 @@ export function decideFinalResult(input: {
       matchedRawValue: null,
       updatedAt: manual.markedAt,
       locked: true,
-      explanation: `存在人工锁定，因此未采用飞书及渠道规则结果。最终科目：${formatSubject(manual.subject)}。`,
+      explanation: `已人工标记，飞书审批及渠道规则不得覆盖。最终科目：${formatSubject(manual.subject)}。`,
     };
   }
 
-  const linkedFeishu = matchFeishuByTransactionNo(transaction, feishu);
-  if (linkedFeishu) {
+  const feishuMatch = resolveFeishuMatch(transaction, feishu, approvalRules);
+  if (feishuMatch.hit && feishuMatch.subject) {
     return {
       transactionId: transaction.id,
       status: "feishu_matched",
       source: "feishu",
-      subject: linkedFeishu.subject,
-      matchedRuleId: null,
+      subject: feishuMatch.subject,
+      matchedRuleId: feishuMatch.rule?.id ?? null,
       ruleVersion,
-      matchedField: "流水号",
-      matchedKeyword: linkedFeishu.approvalType,
-      matchedRawValue: transaction.transactionNo,
-      updatedAt: linkedFeishu.matchedAt,
+      matchedField: "模板ID",
+      matchedKeyword: feishu?.paymentType ?? null,
+      matchedRawValue: feishu?.templateId ?? null,
+      updatedAt: feishu?.matchedAt ?? updatedAt,
       locked: false,
-      explanation: `无人工锁定，按流水号 ${transaction.transactionNo} 关联飞书付款审批「${linkedFeishu.approvalType}」。渠道规则候选已保留但未生效。审批结果不会自动失效，若匹配错误请使用人工标记修正。`,
+      explanation: feishuMatch.explanation,
     };
   }
+
+  const feishuMiss = feishu && feishu.transactionNo === transaction.transactionNo ? feishuMatch.explanation : "";
 
   if (channel.status === "matched" && channel.subject) {
     return {
@@ -68,19 +72,18 @@ export function decideFinalResult(input: {
       matchedRawValue: channel.matchedRawValue,
       updatedAt,
       locked: false,
-      explanation: channel.explanation,
+      explanation: feishuMiss ? `${feishuMiss}${channel.explanation}` : channel.explanation,
     };
   }
 
   let status: MatchStatus = "unmatched";
   if (channel.status === "conflict") status = "rule_conflict";
   if (channel.status === "data_error") status = "data_error";
-  const source: MatchSource = "none";
 
   return {
     transactionId: transaction.id,
     status,
-    source,
+    source: "none" as MatchSource,
     subject: null,
     matchedRuleId: channel.matchedRuleId,
     ruleVersion,
@@ -89,23 +92,10 @@ export function decideFinalResult(input: {
     matchedRawValue: channel.matchedRawValue,
     updatedAt,
     locked: false,
-    explanation: channel.explanation,
+    explanation: feishuMiss ? `${feishuMiss}${channel.explanation}` : channel.explanation,
   };
 }
 
-export function rematchTransaction(input: {
-  transaction: Transaction;
-  manual: ManualMark | null;
-  feishu: FeishuApprovalResult | null;
-  channel: ChannelRuleResult;
-  ruleVersion: string | null;
-  updatedAt: string;
-}): FinalMatchResult {
-  if (input.manual?.locked) {
-    return decideFinalResult(input);
-  }
-  return decideFinalResult({
-    ...input,
-    manual: input.manual ? { ...input.manual, locked: false } : null,
-  });
+export function rematchTransaction(input: Parameters<typeof decideFinalResult>[0]): FinalMatchResult {
+  return decideFinalResult(input);
 }

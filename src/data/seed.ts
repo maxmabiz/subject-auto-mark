@@ -1,5 +1,7 @@
 import type { AuditLog, FeishuApprovalResult, ManualMark, Transaction } from "@/domain/types";
-import { FEISHU_APPROVAL_TYPES } from "@/domain/constants";
+import { APPROVAL_TEMPLATE_IDS } from "@/data/approvalRules.seed";
+import { mockAccount, mockEntityName } from "@/domain/channel/accounts";
+import { displayPlatform } from "@/domain/constants";
 
 type SeedRecord = {
   transaction: Transaction;
@@ -11,6 +13,19 @@ type SeedRecord = {
 function at(day: number, hour: number, minute = 0): string {
   const date = new Date(Date.UTC(2026, 7, day, hour - 8, minute, 0));
   return date.toISOString();
+}
+
+/** 稳定生成形如 2a584b07-26f3-406a-b091-aced98c2b227 的交易号。 */
+function mockTradeNo(seed: string): string {
+  let hex = "";
+  for (let i = 0; hex.length < 32; i += 1) {
+    const code = (seed.charCodeAt(i % seed.length) * (i + 13) + i * 97) & 0xff;
+    hex += code.toString(16).padStart(2, "0");
+  }
+  const chars = hex.slice(0, 32).split("");
+  chars[12] = "4";
+  chars[16] = "a";
+  return `${chars.slice(0, 8).join("")}-${chars.slice(8, 12).join("")}-${chars.slice(12, 16).join("")}-${chars.slice(16, 20).join("")}-${chars.slice(20, 32).join("")}`;
 }
 
 function base(partial: Partial<Transaction> & Pick<Transaction, "id" | "transactionNo" | "platform" | "account">): Transaction {
@@ -32,26 +47,26 @@ function base(partial: Partial<Transaction> & Pick<Transaction, "id" | "transact
     billNo: "",
     channelStatus: "",
     accountingType: "",
+    accountName: "",
+    incomeItem: "",
+    counterpartyAccount: "",
+    availableBalance: null,
+    fee: 0,
+    createdAt: "",
+    updatedAt: "",
     ...partial,
   };
   return {
     ...filled,
-    entityName: filled.entityName || inferEntityName(filled.account, filled.platform),
-    transactionId: filled.transactionId || filled.transactionNo,
+    account: mockAccount(filled.account),
+    entityName: filled.entityName || mockEntityName(mockAccount(filled.account), filled.platform),
+    transactionId: filled.transactionId || mockTradeNo(filled.id),
     billNo: filled.billNo,
     channelStatus: filled.channelStatus || inferChannelStatus(filled),
     accountingType: filled.accountingType || "交易",
+    createdAt: filled.createdAt || filled.transactionTime,
+    updatedAt: filled.updatedAt || filled.transactionTime,
   };
-}
-
-function inferEntityName(account: string, platform: string): string {
-  const text = `${account} ${platform}`.toLowerCase();
-  if (text.includes("muxue")) return "Muxue";
-  if (text.includes("besttech") || text.includes("bst")) return "Besttech";
-  if (text.includes("luzhennan")) return "Luzhennan";
-  if (text.includes("bywise")) return "Bywise";
-  if (text.includes("hqy") || text.includes("fleck") || text.includes("nksea") || text.includes("44414")) return "HQY";
-  return platform ? "HQY" : "";
 }
 
 function inferChannelStatus(tx: Transaction): string {
@@ -64,10 +79,73 @@ function inferChannelStatus(tx: Transaction): string {
   return "TRANSFER";
 }
 
-const software = FEISHU_APPROVAL_TYPES[0];
-const salary = FEISHU_APPROVAL_TYPES[1];
-const purchase = FEISHU_APPROVAL_TYPES[2];
-const ads = FEISHU_APPROVAL_TYPES[3];
+function inferIncomeItem(tx: Transaction): string {
+  const text = `${tx.transactionDescription} ${tx.note} ${tx.businessType} ${tx.codeType} ${tx.transactionType}`.toLowerCase();
+  if (/(shopify|shopline|stripe)/.test(text)) return "电商收款";
+  if (/(conversion|fx|兑换|换汇)/.test(text)) return "货币兑换";
+  if (/interest|利息/.test(text)) return "利息";
+  if (/(payroll|d26|t26|工资)/.test(text)) return "工资薪酬";
+  if (/1688/.test(text)) return "采购付款";
+  if (/(refund|dispute|退单|争议|退款)/.test(text)) return "退款";
+  if (/(reserve|冻结|放款|准备金)/.test(text)) return "准备金";
+  if (/card/.test(text)) return "卡交易";
+  if (/(transfer|调拨|collection)/.test(text)) return "资金调拨";
+  return tx.direction === "in" ? "收款" : "付款";
+}
+
+function inferCounterpartyAccount(tx: Transaction): string {
+  if (tx.payeeName) {
+    const digits = tx.id.replace(/\D/g, "") || "1001";
+    return `62${digits.padStart(14, "0").slice(-14)}`;
+  }
+  const code = tx.id.charCodeAt(tx.id.length - 1) || 0;
+  if (code % 3 === 0) return "";
+  return `88${String(code).padStart(2, "0")}****${String(code * 17).slice(-4)}`;
+}
+
+function inferFee(tx: Transaction): number {
+  if (tx.transactionDescription.toLowerCase().includes("charge")) return 2.5;
+  if (tx.direction === "out" && tx.amount >= 1000) return Number((tx.amount * 0.001).toFixed(2));
+  return 0;
+}
+
+function inferBalance(tx: Transaction): number {
+  const seed = tx.id.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return Number((Math.abs(tx.amount) * 12 + (seed % 8000) + 3200).toFixed(2));
+}
+
+function decorateTransaction(tx: Transaction): Transaction {
+  return {
+    ...tx,
+    accountName: tx.accountName || [tx.entityName, displayPlatform(tx.platform)].filter(Boolean).join(" "),
+    incomeItem: tx.incomeItem || inferIncomeItem(tx),
+    counterpartyAccount: tx.counterpartyAccount || inferCounterpartyAccount(tx),
+    availableBalance: tx.availableBalance ?? inferBalance(tx),
+    fee: tx.fee ?? inferFee(tx),
+    createdAt: tx.createdAt || tx.transactionTime,
+    updatedAt: tx.updatedAt || tx.transactionTime,
+  };
+}
+
+const itSubject = { level1: "公司费用", level2: "", level3: "公司费用-信息化费用" };
+const welfareSubject = { level1: "公司费用", level2: "", level3: "公司费用-职工福利" };
+const logisticsSubject = { level1: "履约业务", level2: "", level3: "履约业务-付物流商" };
+const salaryManual = { level1: "公司费用", level2: "公司费用-职工薪酬", level3: "公司费用-职工薪酬-工资奖金" };
+
+function feishuOf(
+  approvalId: string,
+  approvalName: keyof typeof APPROVAL_TEMPLATE_IDS,
+  paymentType: string,
+  matchedAt: string,
+): Omit<FeishuApprovalResult, "transactionNo"> {
+  return {
+    approvalId,
+    approvalName,
+    templateId: APPROVAL_TEMPLATE_IDS[approvalName],
+    paymentType,
+    matchedAt,
+  };
+}
 
 export function createSeedRecords(): {
   transaction: Transaction;
@@ -89,8 +167,8 @@ export function createSeedRecords(): {
       manual: null,
       feishu: null,
       logs: [
-        { transactionId: "tx-001", time: at(10, 9, 20), actor: "系统", action: "流水进入系统", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
-        { transactionId: "tx-001", time: at(10, 9, 21), actor: "系统", action: "渠道规则自动命中", fromSubject: null, toSubject: { level1: "资金转账", level2: "资金转账-货币兑换", level3: null }, fromSource: "none", toSource: "channel", reason: "命中 Transfer between balances" },
+        { transactionId: "tx-001", time: at(10, 9, 20), actor: "系统", action: "流水创建时间", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
+        { transactionId: "tx-001", time: at(10, 9, 21), actor: "系统", action: "平台规则自动命中", fromSubject: null, toSubject: { level1: "资金转账", level2: "资金转账-货币兑换", level3: null }, fromSource: "none", toSource: "channel", reason: "命中 Transfer between balances" },
       ],
     },
     {
@@ -210,23 +288,18 @@ export function createSeedRecords(): {
         feishuApprovalId: "FS-SOFT-009",
       }),
       manual: {
-        subject: { level1: "公司费用", level2: "公司费用-信息化费用", level3: null },
-        reason: "财务核对后确认为软件订阅，锁定人工结果",
+        subject: itSubject,
+        reason: "财务核对后确认为软件订阅",
         locked: true,
         operator: "财务管理员",
         markedAt: at(8, 9, 40),
       },
-      feishu: {
-        approvalId: "FS-SOFT-009",
-        approvalType: software.approvalType,
-        subject: software.subject,
-        matchedAt: at(7, 18, 0),
-      },
+      feishu: feishuOf("FS-SOFT-009", "日常付款、报销申请", "信息化费用（无发票）", at(7, 18, 0)),
       logs: [
-        { transactionId: "tx-009", time: at(7, 15, 20), actor: "系统", action: "流水进入系统", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
-        { transactionId: "tx-009", time: at(7, 15, 21), actor: "系统", action: "渠道规则自动命中", fromSubject: null, toSubject: { level1: "电商业务", level2: "电商业务-收款", level3: null }, fromSource: "none", toSource: "channel", reason: "命中 shopify" },
-        { transactionId: "tx-009", time: at(7, 18, 0), actor: "系统", action: "后续关联飞书审批并覆盖", fromSubject: { level1: "电商业务", level2: "电商业务-收款", level3: null }, toSubject: software.subject, fromSource: "channel", toSource: "feishu", reason: "按流水号 PO-20260807-009 关联审批单 FS-SOFT-009" },
-        { transactionId: "tx-009", time: at(8, 9, 40), actor: "财务管理员", action: "财务人工修改并锁定", fromSubject: software.subject, toSubject: { level1: "公司费用", level2: "公司费用-信息化费用", level3: null }, fromSource: "feishu", toSource: "manual", reason: "财务核对后确认为软件订阅，锁定人工结果" },
+        { transactionId: "tx-009", time: at(7, 15, 20), actor: "系统", action: "流水创建时间", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
+        { transactionId: "tx-009", time: at(7, 15, 21), actor: "系统", action: "平台规则自动命中", fromSubject: null, toSubject: { level1: "电商业务", level2: "电商业务-收款", level3: null }, fromSource: "none", toSource: "channel", reason: "命中 shopify" },
+        { transactionId: "tx-009", time: at(7, 18, 0), actor: "系统", action: "后续关联飞书审批并覆盖", fromSubject: { level1: "电商业务", level2: "电商业务-收款", level3: null }, toSubject: itSubject, fromSource: "channel", toSource: "feishu", reason: "按流水号 PO-20260807-009 关联日常付款、报销申请 / 信息化费用（无发票）" },
+        { transactionId: "tx-009", time: at(8, 9, 40), actor: "财务管理员", action: "财务人工修改", fromSubject: itSubject, toSubject: itSubject, fromSource: "feishu", toSource: "manual", reason: "财务核对后确认为软件订阅" },
       ],
     },
     {
@@ -242,16 +315,11 @@ export function createSeedRecords(): {
         feishuApprovalId: "FS-PUR-010",
       }),
       manual: null,
-      feishu: {
-        approvalId: "FS-PUR-010",
-        approvalType: purchase.approvalType,
-        subject: purchase.subject,
-        matchedAt: at(9, 16, 10),
-      },
+      feishu: feishuOf("FS-PUR-010", "物流费付款申请", "国际物流费用", at(9, 16, 10)),
       logs: [
-        { transactionId: "tx-010", time: at(9, 13, 50), actor: "系统", action: "流水进入系统", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
-        { transactionId: "tx-010", time: at(9, 13, 51), actor: "系统", action: "渠道规则自动命中", fromSubject: null, toSubject: { level1: "资金转账", level2: "资金转账-付款", level3: null }, fromSource: "none", toSource: "channel", reason: "命中 Payment to BESTTECH LIMITED" },
-        { transactionId: "tx-010", time: at(9, 16, 10), actor: "系统", action: "后续关联飞书审批并覆盖", fromSubject: { level1: "资金转账", level2: "资金转账-付款", level3: null }, toSubject: purchase.subject, fromSource: "channel", toSource: "feishu", reason: "按流水号 PO-20260809-010 关联审批单 FS-PUR-010" },
+        { transactionId: "tx-010", time: at(9, 13, 50), actor: "系统", action: "流水创建时间", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
+        { transactionId: "tx-010", time: at(9, 13, 51), actor: "系统", action: "平台规则自动命中", fromSubject: null, toSubject: { level1: "资金转账", level2: "资金转账-付款", level3: null }, fromSource: "none", toSource: "channel", reason: "命中 Payment to BESTTECH LIMITED" },
+        { transactionId: "tx-010", time: at(9, 16, 10), actor: "系统", action: "后续关联飞书审批并覆盖", fromSubject: { level1: "资金转账", level2: "资金转账-付款", level3: null }, toSubject: logisticsSubject, fromSource: "channel", toSource: "feishu", reason: "按流水号 PO-20260809-010 关联物流费付款申请 / 国际物流费用" },
       ],
     },
     {
@@ -324,23 +392,18 @@ export function createSeedRecords(): {
         feishuApprovalId: "FS-PAY-015",
       }),
       manual: {
-        subject: salary.subject,
+        subject: salaryManual,
         reason: "工资批次已人工核对",
         locked: true,
         operator: "财务管理员",
         markedAt: at(7, 11, 0),
       },
-      feishu: {
-        approvalId: "FS-PAY-015",
-        approvalType: salary.approvalType,
-        subject: salary.subject,
-        matchedAt: at(6, 14, 0),
-      },
+      feishu: feishuOf("FS-PAY-015", "日常付款、报销申请", "公司福利（无发票）", at(6, 14, 0)),
       logs: [
-        { transactionId: "tx-015", time: at(6, 10, 45), actor: "系统", action: "流水进入系统", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
-        { transactionId: "tx-015", time: at(6, 10, 46), actor: "系统", action: "渠道规则自动命中", fromSubject: null, toSubject: salary.subject, fromSource: "none", toSource: "channel", reason: "命中备注 D26" },
-        { transactionId: "tx-015", time: at(6, 14, 0), actor: "系统", action: "后续关联飞书审批并覆盖", fromSubject: salary.subject, toSubject: salary.subject, fromSource: "channel", toSource: "feishu", reason: "按流水号 WF-20260806-015 关联审批单 FS-PAY-015" },
-        { transactionId: "tx-015", time: at(7, 11, 0), actor: "财务管理员", action: "财务人工修改并锁定", fromSubject: salary.subject, toSubject: salary.subject, fromSource: "feishu", toSource: "manual", reason: "工资批次已人工核对" },
+        { transactionId: "tx-015", time: at(6, 10, 45), actor: "系统", action: "流水创建时间", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
+        { transactionId: "tx-015", time: at(6, 10, 46), actor: "系统", action: "平台规则自动命中", fromSubject: null, toSubject: salaryManual, fromSource: "none", toSource: "channel", reason: "命中备注 D26" },
+        { transactionId: "tx-015", time: at(6, 14, 0), actor: "系统", action: "后续关联飞书审批并覆盖", fromSubject: salaryManual, toSubject: welfareSubject, fromSource: "channel", toSource: "feishu", reason: "按流水号 WF-20260806-015 关联日常付款、报销申请 / 公司福利（无发票）" },
+        { transactionId: "tx-015", time: at(7, 11, 0), actor: "财务管理员", action: "财务人工修改", fromSubject: welfareSubject, toSubject: salaryManual, fromSource: "feishu", toSource: "manual", reason: "工资批次已人工核对" },
       ],
     },
   ];
@@ -400,7 +463,7 @@ export function createSeedRecords(): {
     ["tx-067", "WF-20260813-067", "Worldfirst", "WorldFirst-LUZHENNAN", "shopify payment luz", 7800, "in", at(13, 21)],
     ["tx-068", "WF-20260814-068", "Worldfirst", "WorldFirst-LUZHENNAN", "Shopline Payment luz", 3900, "in", at(14, 21)],
     ["tx-069", "WF-20260815-069", "Worldfirst", "WorldFirst-LUZHENNAN", "Collection-Besttech01 luz", 2500, "in", at(15, 8)],
-    ["tx-070", "PO-20260815-070", "Payoneer", "Payoneer-HQY", "office snack reimbursement", 56, "out", at(15, 11)],
+    ["tx-070", "PO-20260815-070", "Payoneer", "Payoneer-HQY", "shopify office snack reimbursement", 56, "out", at(15, 11)],
     ["tx-071", "PP-20260815-071", "Paypal", "PAYPAL-HQY-nksea@163.com", "Dispute reversal", 180, "in", at(15, 12)],
     ["tx-072", "WF-20260815-072", "Worldfirst", "Worldfirst-Besttech01", "T26 bonus note", 8800, "out", at(15, 13)],
   ].map(([id, transactionNo, platform, account, desc, amount, direction, time]) => ({
@@ -460,6 +523,12 @@ export function createSeedRecords(): {
     if (extra) Object.assign(record.transaction, extra);
   }
 
+  const advance = extras.find((item) => item.transaction.id === "tx-070");
+  if (advance) {
+    advance.transaction.feishuApprovalId = "FS-ADV-070";
+    advance.feishu = feishuOf("FS-ADV-070", "日常付款、报销申请", "预支", at(15, 11, 20));
+  }
+
   extras.push({
     transaction: base({
       id: "tx-073",
@@ -473,12 +542,7 @@ export function createSeedRecords(): {
       feishuApprovalId: "FS-PAY-073",
     }),
     manual: null,
-    feishu: {
-      approvalId: "FS-PAY-073",
-      approvalType: salary.approvalType,
-      subject: salary.subject,
-      matchedAt: at(14, 16, 0),
-    },
+    feishu: feishuOf("FS-PAY-073", "日常付款、报销申请", "公司福利（无发票）", at(14, 16, 0)),
     logs: [],
   });
 
@@ -510,12 +574,7 @@ export function createSeedRecords(): {
       feishuApprovalId: "FS-ADS-075",
     }),
     manual: null,
-    feishu: {
-      approvalId: "FS-ADS-075",
-      approvalType: ads.approvalType,
-      subject: ads.subject,
-      matchedAt: at(15, 14, 40),
-    },
+    feishu: feishuOf("FS-ADS-075", "广告付款申请", "充值", at(15, 14, 40)),
     logs: [],
   });
 
@@ -591,35 +650,24 @@ export function createSeedRecords(): {
       account: "Payoneer-HQY",
       transactionTime: at(15, 16, 20),
       amount: 1500,
-      transactionDescription: "unlocked demo after manual",
+      transactionDescription: "software subscription after revoke demo",
       feishuApprovalId: "FS-SOFT-080",
     }),
-    manual: {
-      subject: { level1: "个人收支", level2: "个人收支", level3: null },
-      reason: "演示解除锁定后回退到飞书",
-      locked: false,
-      operator: "财务管理员",
-      markedAt: at(15, 16, 40),
-    },
-    feishu: {
-      approvalId: "FS-SOFT-080",
-      approvalType: software.approvalType,
-      subject: software.subject,
-      matchedAt: at(15, 16, 30),
-    },
+    manual: null,
+    feishu: feishuOf("FS-SOFT-080", "日常付款、报销申请", "信息化费用（无发票）", at(15, 16, 30)),
     logs: [
-      { transactionId: "tx-080", time: at(15, 16, 25), actor: "系统", action: "流水进入系统", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
-      { transactionId: "tx-080", time: at(15, 16, 40), actor: "财务管理员", action: "财务人工修改并锁定", fromSubject: null, toSubject: { level1: "个人收支", level2: "个人收支", level3: null }, fromSource: "none", toSource: "manual", reason: "演示解除锁定后回退到飞书" },
-      { transactionId: "tx-080", time: at(15, 17, 10), actor: "财务管理员", action: "解除人工锁定并回退", fromSubject: { level1: "个人收支", level2: "个人收支", level3: null }, toSubject: software.subject, fromSource: "manual", toSource: "feishu", reason: "解除人工锁定，回退至飞书审批结果" },
+      { transactionId: "tx-080", time: at(15, 16, 25), actor: "系统", action: "流水创建时间", fromSubject: null, toSubject: null, fromSource: null, toSource: "none", reason: "渠道流水同步" },
+      { transactionId: "tx-080", time: at(15, 16, 40), actor: "财务管理员", action: "财务人工修改", fromSubject: null, toSubject: { level1: "个人收支", level2: "个人收支", level3: null }, fromSource: "none", toSource: "manual", reason: "演示人工标记后撤销回退到飞书" },
+      { transactionId: "tx-080", time: at(15, 17, 10), actor: "财务管理员", action: "撤销人工标记并回退", fromSubject: { level1: "个人收支", level2: "个人收支", level3: null }, toSubject: itSubject, fromSource: "manual", toSource: "feishu", reason: "撤销人工标记，回退至飞书审批结果" },
     ],
   });
 
   return [...records, ...extras].map((record) => ({
     ...record,
-    transaction: {
+    transaction: decorateTransaction({
       ...record.transaction,
       billNo: record.transaction.billNo || record.transaction.feishuApprovalId,
-    },
+    }),
     feishu: record.feishu
       ? { ...record.feishu, transactionNo: record.transaction.transactionNo }
       : null,

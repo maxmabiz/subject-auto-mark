@@ -3,12 +3,13 @@ import type { FeishuApprovalResult, ManualMark, Rule, Transaction } from "../typ
 import { decideFinalResult } from "./decide";
 import { matchChannelRules } from "./channel";
 import { normalizeText } from "./normalize";
+import { APPROVAL_TEMPLATE_IDS, FALLBACK_APPROVAL_RULES } from "@/data/approvalRules.seed";
 
 function tx(partial: Partial<Transaction> & Pick<Transaction, "id">): Transaction {
   return {
     transactionNo: partial.transactionNo ?? `NO-${partial.id}`,
     platform: "Payoneer",
-    account: "Payoneer-HQY",
+    account: "Payoneer-A01",
     transactionTime: "2026-08-01T10:00:00.000Z",
     amount: 100,
     currency: "USD",
@@ -26,6 +27,13 @@ function tx(partial: Partial<Transaction> & Pick<Transaction, "id">): Transactio
     billNo: "",
     channelStatus: "DEPOSIT",
     accountingType: "交易",
+    accountName: "HQY Payoneer",
+    incomeItem: "收款",
+    counterpartyAccount: "",
+    availableBalance: 12800,
+    fee: 0,
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
     ...partial,
   };
 }
@@ -41,10 +49,27 @@ function rule(partial: Partial<Rule> & Pick<Rule, "id" | "keyword" | "searchFiel
     errors: [],
     warnings: [],
     version: "V1.0.0",
+    createdAt: "2026-08-01T02:00:00.000Z",
+    updatedAt: "2026-08-01T02:00:00.000Z",
+    matchedCountT1: 0,
     ...partial,
   };
 }
 
+function decide(input: Omit<Parameters<typeof decideFinalResult>[0], "approvalRules"> & { approvalRules?: typeof FALLBACK_APPROVAL_RULES }) {
+  return decideFinalResult({ approvalRules: FALLBACK_APPROVAL_RULES, ...input });
+}
+
+function feishuLink(partial: Partial<FeishuApprovalResult> & Pick<FeishuApprovalResult, "transactionNo">): FeishuApprovalResult {
+  return {
+    approvalId: "FS-1",
+    approvalName: "广告付款申请",
+    templateId: APPROVAL_TEMPLATE_IDS["广告付款申请"],
+    paymentType: "充值",
+    matchedAt: "2026-08-02T10:00:00.000Z",
+    ...partial,
+  };
+}
 const transferSubject = { level1: "资金转账", level2: "资金转账-货币兑换", level3: null };
 const ecommerceSubject = { level1: "电商业务", level2: "电商业务-收款", level3: null };
 const interestSubject = { level1: "公司收入", level2: "公司收入-利息收入", level3: null };
@@ -103,7 +128,7 @@ describe("matching engine", () => {
     const freeze = rule({
       id: "R023",
       platform: "Paypal",
-      account: "PAYPAL-HQY-44414@qq.com",
+      account: "PayPal-A01",
       searchField: "code 类型",
       keyword: "准备金冻结",
       subject: restrictedSubject,
@@ -112,7 +137,7 @@ describe("matching engine", () => {
       tx({
         id: "4",
         platform: "Paypal",
-        account: "PAYPAL-HQY-44414@qq.com",
+        account: "PayPal-A01",
         codeType: "准备金冻结-额外说明",
       }),
       [freeze],
@@ -121,7 +146,7 @@ describe("matching engine", () => {
       tx({
         id: "5",
         platform: "Paypal",
-        account: "PAYPAL-HQY-44414@qq.com",
+        account: "PayPal-A01",
         codeType: "准备金冻结",
       }),
       [freeze],
@@ -136,7 +161,7 @@ describe("matching engine", () => {
       tx({
         id: "6",
         platform: "Worldfirst",
-        account: "Worldfirst-muxue",
+        account: "Worldfirst-A03",
         transactionDescription: "Fund collection from shopify",
       }),
       [
@@ -151,7 +176,7 @@ describe("matching engine", () => {
         rule({
           id: "R059",
           platform: "Worldfirst",
-          account: "Worldfirst-muxue",
+          account: "Worldfirst-A03",
           searchField: "交易描述",
           keyword: "Fund collection",
           subject: { level1: "资金转账", level2: "资金转账-收款", level3: null },
@@ -168,14 +193,14 @@ describe("matching engine", () => {
       tx({
         id: "7",
         platform: "PingPong",
-        account: "PingPong-BESTTECH-B2C",
+        account: "PingPong-A01",
         businessType: "实时换汇转账-入账",
       }),
       [
         rule({
           id: "R047",
           platform: "PingPong",
-          account: "PingPong-BESTTECH-B2C",
+          account: "PingPong-A01",
           searchField: "业务类型",
           keyword: "入账",
           subject: ecommerceSubject,
@@ -183,7 +208,7 @@ describe("matching engine", () => {
         rule({
           id: "R050",
           platform: "PingPong",
-          account: "PingPong-BESTTECH-B2C",
+          account: "PingPong-A01",
           searchField: "业务类型",
           keyword: "实时换汇转账-入账",
           subject: transferSubject,
@@ -227,13 +252,7 @@ describe("matching engine", () => {
     const channel = matchChannelRules(tx({ id: "9", transactionDescription: "shopify" }), [
       rule({ id: "R003", searchField: "交易描述", keyword: "shopify", subject: ecommerceSubject }),
     ]);
-    const feishu: FeishuApprovalResult = {
-      approvalId: "FS-1",
-      approvalType: "广告投放",
-      transactionNo: "NO-9",
-      subject: { level1: "广告业务", level2: "广告业务-付款", level3: null },
-      matchedAt: "2026-08-02T10:00:00.000Z",
-    };
+    const feishu = feishuLink({ transactionNo: "NO-9" });
     const manual: ManualMark = {
       subject: { level1: "公司费用", level2: "公司费用-信息化费用", level3: null },
       reason: "财务确认",
@@ -241,7 +260,7 @@ describe("matching engine", () => {
       operator: "财务管理员",
       markedAt: "2026-08-03T10:00:00.000Z",
     };
-    const final = decideFinalResult({
+    const final = decide({
       transaction: tx({ id: "9" }),
       manual,
       feishu,
@@ -258,14 +277,8 @@ describe("matching engine", () => {
     const channel = matchChannelRules(tx({ id: "10", transactionDescription: "shopify" }), [
       rule({ id: "R003", searchField: "交易描述", keyword: "shopify", subject: ecommerceSubject }),
     ]);
-    const feishu: FeishuApprovalResult = {
-      approvalId: "FS-2",
-      approvalType: "软件及信息服务费",
-      transactionNo: "NO-10",
-      subject: { level1: "公司费用", level2: "公司费用-信息化费用", level3: null },
-      matchedAt: "2026-08-02T10:00:00.000Z",
-    };
-    const final = decideFinalResult({
+    const feishu = feishuLink({ approvalId: "FS-2", transactionNo: "NO-10" });
+    const final = decide({
       transaction: tx({ id: "10" }),
       manual: null,
       feishu,
@@ -274,9 +287,9 @@ describe("matching engine", () => {
       updatedAt: "2026-08-02T10:00:00.000Z",
     });
     expect(final.source).toBe("feishu");
-    expect(final.subject?.level2).toBe("公司费用-信息化费用");
-    expect(final.matchedField).toBe("流水号");
-    expect(final.matchedRawValue).toBe("NO-10");
+    expect(final.subject?.level3).toBe("广告业务-付款-付代理商");
+    expect(final.matchedField).toBe("模板ID");
+    expect(final.matchedRawValue).toBe(APPROVAL_TEMPLATE_IDS["广告付款申请"]);
     expect(channel.status).toBe("matched");
   });
 
@@ -285,16 +298,13 @@ describe("matching engine", () => {
     const channel = matchChannelRules(transaction, [
       rule({ id: "R003", searchField: "交易描述", keyword: "shopify", subject: ecommerceSubject }),
     ]);
-    const final = decideFinalResult({
+    const final = decide({
       transaction,
       manual: null,
-      feishu: {
+      feishu: feishuLink({
         approvalId: "FS-X",
-        approvalType: "软件及信息服务费",
         transactionNo: "OTHER-NO",
-        subject: { level1: "公司费用", level2: "公司费用-信息化费用", level3: null },
-        matchedAt: "2026-08-02T10:00:00.000Z",
-      },
+      }),
       channel,
       ruleVersion: "V1.0.0",
       updatedAt: "2026-08-02T10:00:00.000Z",
@@ -302,13 +312,13 @@ describe("matching engine", () => {
     expect(final.source).toBe("channel");
   });
 
-  it("人工锁定结果不会被重新匹配覆盖", () => {
-    const before = decideFinalResult({
+  it("人工标记优先于飞书和渠道规则，不会被自动覆盖", () => {
+    const before = decide({
       transaction: tx({ id: "11", transactionDescription: "shopify" }),
       manual: {
         subject: interestSubject,
-        reason: "锁定",
-        locked: true,
+        reason: "财务确认",
+        locked: false,
         operator: "财务管理员",
         markedAt: "2026-08-01T12:00:00.000Z",
       },
@@ -323,8 +333,8 @@ describe("matching engine", () => {
     expect(before.subject).toEqual(interestSubject);
   });
 
-  it("解除人工锁定后正确回退", () => {
-    const transaction = tx({ id: "12", transactionDescription: "CREDIT INTEREST", platform: "HSBC", account: "HSBC-HK" });
+  it("撤销人工标记后回退到飞书或渠道规则", () => {
+    const transaction = tx({ id: "12", transactionDescription: "CREDIT INTEREST", platform: "HSBC", account: "HSBC-A01" });
     const channel = matchChannelRules(transaction, [
       rule({
         id: "R021",
@@ -334,38 +344,26 @@ describe("matching engine", () => {
         subject: interestSubject,
       }),
     ]);
-    const feishu: FeishuApprovalResult = {
+    const feishu = feishuLink({
       approvalId: "FS-3",
-      approvalType: "采购付款",
+      approvalName: "广告付款申请",
+      templateId: APPROVAL_TEMPLATE_IDS["广告付款申请"],
+      paymentType: "充值",
       transactionNo: transaction.transactionNo,
-      subject: { level1: "履约业务", level2: "履约业务-采购付款", level3: null },
-      matchedAt: "2026-08-02T10:00:00.000Z",
-    };
-    const unlocked = decideFinalResult({
+    });
+    const afterRevoke = decide({
       transaction,
-      manual: {
-        subject: ecommerceSubject,
-        reason: "临时",
-        locked: false,
-        operator: "财务管理员",
-        markedAt: "2026-08-03T10:00:00.000Z",
-      },
+      manual: null,
       feishu,
       channel,
       ruleVersion: "V1.0.0",
       updatedAt: "2026-08-04T10:00:00.000Z",
     });
-    expect(unlocked.source).toBe("feishu");
+    expect(afterRevoke.source).toBe("feishu");
 
-    const noFeishu = decideFinalResult({
+    const noFeishu = decide({
       transaction,
-      manual: {
-        subject: ecommerceSubject,
-        reason: "临时",
-        locked: false,
-        operator: "财务管理员",
-        markedAt: "2026-08-03T10:00:00.000Z",
-      },
+      manual: null,
       feishu: null,
       channel,
       ruleVersion: "V1.0.0",
@@ -375,6 +373,30 @@ describe("matching engine", () => {
     expect(noFeishu.subject).toEqual(interestSubject);
   });
 
+  it("审批单未配置科目时回退渠道规则", () => {
+    const transaction = tx({ id: "14", transactionNo: "NO-14", transactionDescription: "shopify" });
+    const channel = matchChannelRules(transaction, [
+      rule({ id: "R003", searchField: "交易描述", keyword: "shopify", subject: ecommerceSubject }),
+    ]);
+    const final = decide({
+      transaction,
+      manual: null,
+      feishu: feishuLink({
+        approvalId: "FS-ADV",
+        approvalName: "日常付款、报销申请",
+        templateId: APPROVAL_TEMPLATE_IDS["日常付款、报销申请"],
+        paymentType: "预支",
+        transactionNo: transaction.transactionNo,
+      }),
+      channel,
+      ruleVersion: "V1.0.0",
+      updatedAt: "2026-08-04T10:00:00.000Z",
+    });
+    expect(final.source).toBe("channel");
+    expect(final.subject).toEqual(ecommerceSubject);
+    expect(final.explanation).toContain("未配置有效科目");
+  });
+
   it("23位数字关键词完整保留并可以匹配", () => {
     const keyword = "12150020237721230477174";
     expect(keyword).toHaveLength(23);
@@ -382,14 +404,14 @@ describe("matching engine", () => {
       tx({
         id: "13",
         platform: "PingPong",
-        account: "PingPong-BESTTECH-B2C",
+        account: "PingPong-A01",
         note: "ref 12150020237721230477174 settlement",
       }),
       [
         rule({
           id: "R042",
           platform: "PingPong",
-          account: "PingPong-BESTTECH-B2C",
+          account: "PingPong-A01",
           searchField: "备注",
           keyword,
           subject: { level1: "垫资业务", level2: "垫资业务-收款", level3: null },

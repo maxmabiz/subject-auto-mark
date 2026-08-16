@@ -1,6 +1,8 @@
 import type { ParsedExcelRow, Rule, RuleValidationResult, SubjectPath } from "../types";
 import { ALL_ACCOUNT_LABEL, getMatchMode, isSearchFieldSupported } from "../matching/fieldMap";
 import { isBlank, normalizeText, subjectKey } from "../matching/normalize";
+import { channelMatchKey } from "../channel/match";
+import { mockAccount } from "../channel/accounts";
 
 function toSubject(row: ParsedExcelRow): SubjectPath {
   return {
@@ -11,7 +13,7 @@ function toSubject(row: ParsedExcelRow): SubjectPath {
 }
 
 function scopeKey(row: ParsedExcelRow): string {
-  return [normalizeText(row.platform), normalizeText(row.account), normalizeText(row.searchField), normalizeText(row.keyword)].join("|");
+  return channelMatchKey(row.platform, row.account, row.searchField, row.keyword);
 }
 
 export function validateParsedRules(rows: ParsedExcelRow[], version: string): RuleValidationResult {
@@ -92,7 +94,7 @@ export function validateParsedRules(rows: ParsedExcelRow[], version: string): Ru
       id: `R${String(row.excelRow).padStart(3, "0")}`,
       excelRow: row.excelRow,
       platform: row.platform.trim(),
-      account: row.account.trim(),
+      account: mockAccount(row.account.trim()),
       searchField: row.searchField.trim(),
       keyword: row.keyword,
       subject: toSubject(row),
@@ -102,6 +104,9 @@ export function validateParsedRules(rows: ParsedExcelRow[], version: string): Ru
       errors,
       warnings,
       version,
+      createdAt: "",
+      updatedAt: "",
+      matchedCountT1: 0,
     };
   });
 
@@ -116,21 +121,18 @@ export function validateParsedRules(rows: ParsedExcelRow[], version: string): Ru
 
 export function diffRuleSets(previous: Rule[], next: Rule[]) {
   const prevMap = new Map(previous.filter((rule) => rule.validationStatus !== "error").map((rule) => [
-    `${normalizeText(rule.platform)}|${normalizeText(rule.account)}|${normalizeText(rule.searchField)}|${normalizeText(rule.keyword)}`,
+    channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword),
     rule,
   ]));
   const nextValid = next.filter((rule) => rule.validationStatus !== "error");
   const nextKeys = new Set(
-    nextValid.map(
-      (rule) =>
-        `${normalizeText(rule.platform)}|${normalizeText(rule.account)}|${normalizeText(rule.searchField)}|${normalizeText(rule.keyword)}`,
-    ),
+    nextValid.map((rule) => channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword)),
   );
 
   let added = 0;
   let modified = 0;
   for (const rule of nextValid) {
-    const key = `${normalizeText(rule.platform)}|${normalizeText(rule.account)}|${normalizeText(rule.searchField)}|${normalizeText(rule.keyword)}`;
+    const key = channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword);
     const prev = prevMap.get(key);
     if (!prev) added += 1;
     else if (subjectKey(prev.subject) !== subjectKey(rule.subject)) modified += 1;

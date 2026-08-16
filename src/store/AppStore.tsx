@@ -2,9 +2,14 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { toast } from "sonner";
 import { CURRENT_USER, FALLBACK_EXCEL_ROWS, STORAGE_KEY, TEMPLATE_PATH } from "@/domain/constants";
 import { parseRuleWorkbook } from "@/domain/excel/parse";
-import { diffRuleSets, validateParsedRules } from "@/domain/excel/validate";
+import { validateParsedRules } from "@/domain/excel/validate";
+import { FALLBACK_APPROVAL_RULES, FALLBACK_APPROVAL_RULE_LOGS } from "@/data/approvalRules.seed";
+import { seedChannelRuleLogs } from "@/data/channelRules.seed";
 import type {
+  ApprovalRule,
+  ApprovalRuleLog,
   AuditLog,
+  ChannelRuleLog,
   EnrichedTransaction,
   ManualMark,
   ParsedExcelRow,
@@ -13,12 +18,20 @@ import type {
   SubjectPath,
 } from "@/domain/types";
 import { createSeedRecords } from "@/data/seed";
-import { nextVersion, uid } from "@/lib/utils";
 import { appendLog, enrichOne } from "./compute";
+import { approvalMatchKey } from "@/domain/approval/match";
+import { buildApprovalRuleLog } from "@/domain/approval/log";
+import { channelMatchKey } from "@/domain/channel/match";
+import { buildChannelRuleLog } from "@/domain/channel/log";
+import { hydrateChannelRule } from "@/domain/channel/rule";
 
 type PersistShape = {
-  versions: RuleVersion[];
-  currentVersionId: string;
+  versions?: RuleVersion[];
+  currentVersionId?: string;
+  channelRules: Rule[];
+  channelRuleLogs: ChannelRuleLog[];
+  approvalRules: ApprovalRule[];
+  approvalRuleLogs: ApprovalRuleLog[];
   records: EnrichedTransaction[];
   auditLogs: AuditLog[];
   updatedAt: string;
@@ -27,23 +40,23 @@ type PersistShape = {
 type AppStoreValue = {
   loading: boolean;
   error: string | null;
-  versions: RuleVersion[];
-  currentVersion: RuleVersion | null;
   records: EnrichedTransaction[];
   auditLogs: AuditLog[];
   updatedAt: string;
   rules: Rule[];
+  approvalRules: ApprovalRule[];
+  approvalLogsFor: (ruleId: string) => ApprovalRuleLog[];
+  channelLogsFor: (ruleId: string) => ChannelRuleLog[];
   getRecord: (id: string) => EnrichedTransaction | undefined;
   logsFor: (transactionId: string) => AuditLog[];
-  markManual: (id: string, payload: { subject: SubjectPath; reason: string; locked: boolean }) => void;
-  unlockManual: (id: string) => void;
-  publishRules: (input: {
-    rows: ParsedExcelRow[];
-    description: string;
-    onlyValid: boolean;
-    fileName: string;
-  }) => RuleVersion;
-  rollbackVersion: (versionId: string) => void;
+  markManual: (id: string, payload: { subject: SubjectPath; reason: string }) => void;
+  revokeManual: (id: string) => void;
+  saveApprovalRule: (rule: ApprovalRule) => { ok: boolean; message: string };
+  deleteApprovalRule: (id: string) => { ok: boolean; message: string };
+  importApprovalRules: (rules: ApprovalRule[]) => { ok: boolean; message: string };
+  saveChannelRule: (rule: Rule) => { ok: boolean; message: string };
+  deleteChannelRule: (id: string) => { ok: boolean; message: string };
+  importChannelRules: (rules: Rule[]) => { ok: boolean; message: string };
 };
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -66,28 +79,14 @@ async function loadExcelRows(): Promise<ParsedExcelRow[]> {
 }
 
 function bootstrapState(rows: ParsedExcelRow[]): PersistShape {
-  const versionNo = "V1.0.0";
-  const validated = validateParsedRules(rows, versionNo);
-  const version: RuleVersion = {
-    id: "ver-1",
-    version: versionNo,
-    status: "active",
-    publishedAt: "2026-08-01T02:00:00.000Z",
-    publisher: CURRENT_USER,
-    description: "导入业务方《科目匹配规则-原始配置》作为初始生效版本",
-    totalRules: validated.total,
-    validRules: validated.valid,
-    errorRules: validated.error,
-    warningRules: validated.warning,
-    added: validated.valid,
-    modified: 0,
-    disabled: 0,
-    platforms: [...new Set(validated.rules.filter((rule) => rule.validationStatus !== "error").map((rule) => rule.platform))],
-    rules: validated.rules,
-  };
+  const validated = validateParsedRules(rows, "");
+  const channelRules = validated.rules
+    .filter((rule) => rule.validationStatus !== "error")
+    .map((rule) => hydrateChannelRule(rule));
+  const channelRuleLogs = seedChannelRuleLogs(channelRules);
   const seed = createSeedRecords();
   const records = seed.map((item) =>
-    enrichOne(item.transaction, item.manual, item.feishu, version.rules, version.version),
+    enrichOne(item.transaction, item.manual, item.feishu, channelRules, FALLBACK_APPROVAL_RULES, ""),
   );
   const auditLogs: AuditLog[] = seed.flatMap((item, index) =>
     (item.logs.length
@@ -97,7 +96,7 @@ function bootstrapState(rows: ParsedExcelRow[]): PersistShape {
             transactionId: item.transaction.id,
             time: item.transaction.transactionTime,
             actor: "系统",
-            action: "流水进入系统",
+            action: "流水创建时间",
             fromSubject: null,
             toSubject: null,
             fromSource: null,
@@ -108,8 +107,10 @@ function bootstrapState(rows: ParsedExcelRow[]): PersistShape {
     ).map((log, logIndex) => ({ ...log, id: `seed-${index}-${logIndex}` })),
   );
   return {
-    versions: [version],
-    currentVersionId: version.id,
+    channelRules,
+    channelRuleLogs,
+    approvalRules: FALLBACK_APPROVAL_RULES,
+    approvalRuleLogs: FALLBACK_APPROVAL_RULE_LOGS,
     records,
     auditLogs,
     updatedAt: new Date().toISOString(),
@@ -120,7 +121,45 @@ function readPersist(): PersistShape | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as PersistShape;
+    const parsed = JSON.parse(raw) as PersistShape;
+    if (!Array.isArray(parsed.approvalRules)) parsed.approvalRules = FALLBACK_APPROVAL_RULES;
+    parsed.approvalRules = parsed.approvalRules.map((item) => ({
+      ...item,
+      createdAt: item.createdAt || "2026-08-01T02:00:00.000Z",
+      updatedAt: item.updatedAt || item.createdAt || "2026-08-01T02:00:00.000Z",
+      matchedCountT1: item.matchedCountT1 ?? 0,
+    }));
+    if (!Array.isArray(parsed.approvalRuleLogs)) {
+      parsed.approvalRuleLogs = parsed.approvalRules.map((item) =>
+        buildApprovalRuleLog({
+          id: `arlog-${item.id}-create`,
+          ruleId: item.id,
+          time: item.createdAt,
+          actor: "系统",
+          action: "create",
+          after: item,
+        }),
+      );
+    }
+    if (!Array.isArray(parsed.channelRules)) {
+      const versions = parsed.versions ?? [];
+      const current = versions.find((item) => item.id === parsed.currentVersionId) ?? versions[0];
+      parsed.channelRules = (current?.rules ?? []).filter((item) => item.validationStatus !== "error");
+    }
+    parsed.channelRules = parsed.channelRules.map(hydrateChannelRule);
+    if (!Array.isArray(parsed.channelRuleLogs)) {
+      parsed.channelRuleLogs = parsed.channelRules.map((item) =>
+        buildChannelRuleLog({
+          id: `crlog-${item.id}-create`,
+          ruleId: item.id,
+          time: item.createdAt,
+          actor: "系统",
+          action: "create",
+          after: item,
+        }),
+      );
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -165,21 +204,29 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AppStoreValue>(() => {
-    const versions = state?.versions ?? [];
-    const currentVersion = versions.find((item) => item.id === state?.currentVersionId) ?? versions[0] ?? null;
     const records = state?.records ?? [];
     const auditLogs = state?.auditLogs ?? [];
-    const rules = currentVersion?.rules ?? [];
+    const rules = state?.channelRules ?? [];
+    const approvalRules = state?.approvalRules ?? [];
+    const approvalRuleLogs = state?.approvalRuleLogs ?? [];
+    const channelRuleLogs = state?.channelRuleLogs ?? [];
 
     return {
       loading,
       error,
-      versions,
-      currentVersion,
       records,
       auditLogs,
       updatedAt: state?.updatedAt ?? "",
       rules,
+      approvalRules,
+      approvalLogsFor: (ruleId) =>
+        approvalRuleLogs
+          .filter((item) => item.ruleId === ruleId)
+          .sort((a, b) => b.time.localeCompare(a.time)),
+      channelLogsFor: (ruleId) =>
+        channelRuleLogs
+          .filter((item) => item.ruleId === ruleId)
+          .sort((a, b) => b.time.localeCompare(a.time)),
       getRecord: (id) => records.find((item) => item.transaction.id === id),
       logsFor: (transactionId) =>
         auditLogs
@@ -187,17 +234,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           .sort((a, b) => b.time.localeCompare(a.time)),
       markManual: (id, payload) => {
         persist((prev) => {
-          const version = prev.versions.find((item) => item.id === prev.currentVersionId);
           const recordsNext = prev.records.map((record) => {
             if (record.transaction.id !== id) return record;
             const manual: ManualMark = {
               subject: payload.subject,
               reason: payload.reason,
-              locked: payload.locked,
+              locked: true,
               operator: CURRENT_USER,
               markedAt: new Date().toISOString(),
             };
-            const next = enrichOne(record.transaction, manual, record.feishu, version?.rules ?? [], version?.version ?? "", record, true);
+            const next = enrichOne(record.transaction, manual, record.feishu, prev.channelRules ?? [], prev.approvalRules ?? [], "", record, true);
             return next;
           });
           const before = prev.records.find((item) => item.transaction.id === id);
@@ -209,7 +255,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               transactionId: id,
               time: new Date().toISOString(),
               actor: CURRENT_USER,
-              action: payload.locked ? "财务人工修改并锁定" : "财务人工修改",
+              action: "财务人工修改",
               fromSubject: before?.final.subject ?? null,
               toSubject: after?.final.subject ?? payload.subject,
               fromSource: before?.final.source ?? null,
@@ -220,13 +266,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         });
         toast.success("人工标记已保存");
       },
-      unlockManual: (id) => {
+      revokeManual: (id) => {
         persist((prev) => {
-          const version = prev.versions.find((item) => item.id === prev.currentVersionId);
           const recordsNext = prev.records.map((record) => {
             if (record.transaction.id !== id || !record.manual) return record;
-            const manual = { ...record.manual, locked: false };
-            return enrichOne(record.transaction, manual, record.feishu, version?.rules ?? [], version?.version ?? "", record, true);
+            return enrichOne(record.transaction, null, record.feishu, prev.channelRules ?? [], prev.approvalRules ?? [], "", record, true);
           });
           const before = prev.records.find((item) => item.transaction.id === id);
           const after = recordsNext.find((item) => item.transaction.id === id);
@@ -237,70 +281,225 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               transactionId: id,
               time: new Date().toISOString(),
               actor: CURRENT_USER,
-              action: "解除人工锁定并回退",
+              action: "撤销人工标记并回退",
               fromSubject: before?.final.subject ?? null,
               toSubject: after?.final.subject ?? null,
               fromSource: before?.final.source ?? null,
               toSource: after?.final.source ?? null,
-              reason: `解除人工锁定后回退为${after?.final.source === "feishu" ? "飞书审批" : after?.final.source === "channel" ? "渠道规则" : "待处理"}结果`,
+              reason: `撤销人工标记后回退为${after?.final.source === "feishu" ? "飞书审批" : after?.final.source === "channel" ? "平台规则" : "待处理"}结果`,
             }),
           };
         });
-        toast.success("已解除人工锁定并重新计算");
+        toast.success("已撤销人工标记并重新计算");
       },
-      publishRules: ({ rows, description, onlyValid, fileName }) => {
-        let published!: RuleVersion;
+      saveChannelRule: (rule) => {
+        if (!rule.platform.trim() || !rule.account.trim() || !rule.searchField.trim() || !rule.keyword.trim() || !rule.subject.level1.trim() || !rule.subject.level2.trim()) {
+          const message = "平台、账号、检索字段、关键词、一级科目和二级科目必填";
+          toast.error(message);
+          return { ok: false, message };
+        }
+        if (rule.validationStatus === "error") {
+          const message = rule.errors[0] || "规则不完整，无法保存";
+          toast.error(message);
+          return { ok: false, message };
+        }
+        const key = channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword);
+        const dup = (state?.channelRules ?? []).find((item) => item.id !== rule.id && channelMatchKey(item.platform, item.account, item.searchField, item.keyword) === key);
+        if (dup) {
+          const message = "平台、账号、检索字段与关键词已存在，无法保存";
+          toast.error(message);
+          return { ok: false, message };
+        }
         persist((prev) => {
-          const current = prev.versions.find((item) => item.id === prev.currentVersionId);
-          const versionNo = nextVersion(current?.version ?? "V1.0.0");
-          const validated = validateParsedRules(rows, versionNo);
-          const rulesToPublish = onlyValid
-            ? validated.rules.map((rule) =>
-                rule.validationStatus === "error" ? rule : { ...rule, version: versionNo },
-              )
-            : validated.rules.map((rule) => ({ ...rule, version: versionNo }));
-          const diff = diffRuleSets(current?.rules ?? [], rulesToPublish);
-          published = {
-            id: uid("ver"),
-            version: versionNo,
-            status: "active",
-            publishedAt: new Date().toISOString(),
-            publisher: CURRENT_USER,
-            description: description || `上传 ${fileName} 发布`,
-            totalRules: validated.total,
-            validRules: validated.valid,
-            errorRules: validated.error,
-            warningRules: validated.warning,
-            added: diff.added,
-            modified: diff.modified,
-            disabled: diff.disabled,
-            platforms: [...new Set(rulesToPublish.filter((rule) => rule.validationStatus !== "error").map((rule) => rule.platform))],
-            rules: rulesToPublish,
+          const exists = prev.channelRules.find((item) => item.id === rule.id);
+          const now = new Date().toISOString();
+          const next = {
+            ...rule,
+            createdAt: exists?.createdAt ?? rule.createdAt ?? now,
+            updatedAt: now,
+            matchedCountT1: exists?.matchedCountT1 ?? rule.matchedCountT1 ?? 0,
           };
-          const versions = prev.versions.map((item) => ({ ...item, status: "inactive" as const }));
-          toast.success(`已发布 ${published.version}`);
+          const log = buildChannelRuleLog({
+            ruleId: next.id,
+            time: now,
+            actor: CURRENT_USER,
+            action: exists ? "update" : "create",
+            before: exists ?? null,
+            after: next,
+          });
           return {
             ...prev,
-            versions: [published, ...versions],
-            currentVersionId: published.id,
+            channelRules: exists
+              ? prev.channelRules.map((item) => (item.id === rule.id ? next : item))
+              : [...prev.channelRules, next],
+            channelRuleLogs: !exists || log.changes.length > 0 ? [log, ...(prev.channelRuleLogs ?? [])] : prev.channelRuleLogs,
           };
         });
-        return published;
+        toast.success("已保存平台规则");
+        return { ok: true, message: "已保存平台规则" };
       },
-      rollbackVersion: (versionId) => {
+      deleteChannelRule: (id) => {
         persist((prev) => {
-          const target = prev.versions.find((item) => item.id === versionId);
+          const target = prev.channelRules.find((item) => item.id === id);
           if (!target) return prev;
-          toast.success(`已回滚到 ${target.version}`);
+          const now = new Date().toISOString();
+          const log = buildChannelRuleLog({
+            ruleId: id,
+            time: now,
+            actor: CURRENT_USER,
+            action: "delete",
+            before: target,
+            after: null,
+          });
           return {
             ...prev,
-            currentVersionId: target.id,
-            versions: prev.versions.map((item) => ({
-              ...item,
-              status: item.id === target.id ? "active" : "inactive",
-            })),
+            channelRules: prev.channelRules.filter((item) => item.id !== id),
+            channelRuleLogs: [log, ...(prev.channelRuleLogs ?? [])],
           };
         });
+        toast.success("已删除平台规则");
+        return { ok: true, message: "已删除" };
+      },
+      importChannelRules: (incoming) => {
+        const records = state?.records ?? [];
+        const inUseIds = new Set(records.filter((item) => item.final.source === "channel" && item.final.matchedRuleId).map((item) => item.final.matchedRuleId!));
+        persist((prev) => {
+          const now = new Date().toISOString();
+          const byKey = new Map(prev.channelRules.map((item) => [channelMatchKey(item.platform, item.account, item.searchField, item.keyword), item]));
+          const merged = incoming.map((rule) => {
+            const existing = byKey.get(channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword));
+            return hydrateChannelRule({
+              ...rule,
+              id: existing?.id ?? rule.id,
+              createdAt: existing?.createdAt ?? now,
+              updatedAt: now,
+              matchedCountT1: existing?.matchedCountT1 ?? rule.matchedCountT1 ?? 0,
+            });
+          });
+          const kept = prev.channelRules.filter((item) => inUseIds.has(item.id) && !incoming.some((next) => next.id === item.id || channelMatchKey(next.platform, next.account, next.searchField, next.keyword) === channelMatchKey(item.platform, item.account, item.searchField, item.keyword)));
+          for (const item of kept) merged.push(item);
+          const logs = merged.flatMap((rule) => {
+            const existing = byKey.get(channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword));
+            if (existing && existing.keyword === rule.keyword && JSON.stringify(existing.subject) === JSON.stringify(rule.subject) && existing.platform === rule.platform && existing.account === rule.account && existing.searchField === rule.searchField) {
+              return [];
+            }
+            return [
+              buildChannelRuleLog({
+                ruleId: rule.id,
+                time: now,
+                actor: CURRENT_USER,
+                action: "import",
+                before: existing ?? null,
+                after: rule,
+              }),
+            ];
+          });
+          return { ...prev, channelRules: merged, channelRuleLogs: [...logs, ...(prev.channelRuleLogs ?? [])] };
+        });
+        toast.success(`已导入 ${incoming.length} 条平台规则`);
+        return { ok: true, message: "已导入" };
+      },
+      saveApprovalRule: (rule) => {
+        if (!rule.approvalName.trim() || !rule.templateId.trim() || !rule.paymentType.trim() || !rule.subject?.level1.trim()) {
+          const message = "审批单名称、模板ID、付款申请类型和一级科目必填";
+          toast.error(message);
+          return { ok: false, message };
+        }
+        const key = approvalMatchKey(rule.templateId, rule.paymentType);
+        const dup = (state?.approvalRules ?? []).find((item) => item.id !== rule.id && approvalMatchKey(item.templateId, item.paymentType) === key);
+        if (dup) {
+          const message = "模板ID与付款申请类型已存在，无法保存";
+          toast.error(message);
+          return { ok: false, message };
+        }
+        persist((prev) => {
+          const exists = prev.approvalRules.find((item) => item.id === rule.id);
+          const now = new Date().toISOString();
+          const next = {
+            ...rule,
+            createdAt: exists?.createdAt ?? rule.createdAt ?? now,
+            updatedAt: now,
+            matchedCountT1: exists?.matchedCountT1 ?? rule.matchedCountT1 ?? 0,
+          };
+          const log = buildApprovalRuleLog({
+            ruleId: next.id,
+            time: now,
+            actor: CURRENT_USER,
+            action: exists ? "update" : "create",
+            before: exists ?? null,
+            after: next,
+          });
+          return {
+            ...prev,
+            approvalRules: exists
+              ? prev.approvalRules.map((item) => (item.id === rule.id ? next : item))
+              : [...prev.approvalRules, next],
+            approvalRuleLogs: !exists || log.changes.length > 0 ? [log, ...(prev.approvalRuleLogs ?? [])] : prev.approvalRuleLogs,
+          };
+        });
+        toast.success("已保存审批单规则");
+        return { ok: true, message: "已保存审批单规则" };
+      },
+      deleteApprovalRule: (id) => {
+        persist((prev) => {
+          const target = prev.approvalRules.find((item) => item.id === id);
+          if (!target) return prev;
+          const now = new Date().toISOString();
+          const log = buildApprovalRuleLog({
+            ruleId: id,
+            time: now,
+            actor: CURRENT_USER,
+            action: "delete",
+            before: target,
+            after: null,
+          });
+          return {
+            ...prev,
+            approvalRules: prev.approvalRules.filter((item) => item.id !== id),
+            approvalRuleLogs: [log, ...(prev.approvalRuleLogs ?? [])],
+          };
+        });
+        toast.success("已删除审批单规则");
+        return { ok: true, message: "已删除" };
+      },
+      importApprovalRules: (rules) => {
+        const records = state?.records ?? [];
+        const inUseIds = new Set(records.filter((item) => item.final.source === "feishu" && item.final.matchedRuleId).map((item) => item.final.matchedRuleId!));
+        persist((prev) => {
+          const now = new Date().toISOString();
+          const byKey = new Map(prev.approvalRules.map((item) => [approvalMatchKey(item.templateId, item.paymentType), item]));
+          const merged = rules.map((rule) => {
+            const existing = byKey.get(approvalMatchKey(rule.templateId, rule.paymentType));
+            return {
+              ...rule,
+              id: existing?.id ?? rule.id,
+              createdAt: existing?.createdAt ?? now,
+              updatedAt: now,
+              matchedCountT1: existing?.matchedCountT1 ?? rule.matchedCountT1 ?? 0,
+            };
+          });
+          const kept = prev.approvalRules.filter((item) => inUseIds.has(item.id) && !rules.some((next) => next.id === item.id || approvalMatchKey(next.templateId, next.paymentType) === approvalMatchKey(item.templateId, item.paymentType)));
+          for (const item of kept) merged.push(item);
+          const logs = merged.flatMap((rule) => {
+            const existing = byKey.get(approvalMatchKey(rule.templateId, rule.paymentType));
+            if (existing && existing.approvalName === rule.approvalName && JSON.stringify(existing.subject) === JSON.stringify(rule.subject)) {
+              return [];
+            }
+            return [
+              buildApprovalRuleLog({
+                ruleId: rule.id,
+                time: now,
+                actor: CURRENT_USER,
+                action: "import",
+                before: existing ?? null,
+                after: rule,
+              }),
+            ];
+          });
+          return { ...prev, approvalRules: merged, approvalRuleLogs: [...logs, ...(prev.approvalRuleLogs ?? [])] };
+        });
+        toast.success(`已导入 ${rules.length} 条审批单规则`);
+        return { ok: true, message: "已导入" };
       },
     };
   }, [error, loading, persist, state]);

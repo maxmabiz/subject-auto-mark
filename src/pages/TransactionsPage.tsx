@@ -6,20 +6,19 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
-import { AlertDialog, AlertDialogContent } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
-import { StatusBadge } from "@/components/StatusBadge";
+import { SourceBadge, StatusBadge } from "@/components/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { ManualMarkDialog } from "@/components/transaction/ManualMarkDialog";
 import { TransactionDrawer } from "@/components/transaction/TransactionDrawer";
 import { DISPLAY_STATUS_LABEL, DISPLAY_STATUS_OPTIONS, SOURCE_LABEL, displayPlatform, matchesDisplayStatus, toDisplayStatus } from "@/domain/constants";
-import { buildSubjectDictionary, subjectTree } from "@/domain/subjects";
+import { formatSubject } from "@/domain/matching";
 import type { EnrichedTransaction } from "@/domain/types";
 import { dash, formatAmount, formatDateTime } from "@/lib/format";
 import { useAppStore } from "@/store/AppStore";
@@ -35,24 +34,18 @@ const emptyFilters = {
   dateTo: "",
   transactionId: "",
   billNo: "",
-  direction: "all",
   status: "all",
   source: "all",
-  level1: "all",
-  level2: "all",
-  level3: "all",
+  subject: "",
 };
 
 export function TransactionsPage() {
-  const { loading, error, records, rules, unlockManual } = useAppStore();
-  const subjects = useMemo(() => buildSubjectDictionary(rules), [rules]);
-  const tree = useMemo(() => subjectTree(subjects), [subjects]);
+  const { loading, error, records } = useAppStore();
   const [draft, setDraft] = useState(emptyFilters);
   const [applied, setApplied] = useState(emptyFilters);
   const [expanded, setExpanded] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [manualId, setManualId] = useState<string | null>(null);
-  const [unlockId, setUnlockId] = useState<string | null>(null);
 
   const entities = useMemo(
     () => [...new Set(records.map((item) => item.transaction.entityName).filter(Boolean))],
@@ -70,6 +63,7 @@ export function TransactionsPage() {
   const filtered = useMemo(() => {
     const transactionId = applied.transactionId.trim().toLowerCase();
     const billNo = applied.billNo.trim().toLowerCase();
+    const subject = applied.subject.trim();
     return records.filter((item) => {
       const tx = item.transaction;
       const day = tx.transactionTime.slice(0, 10);
@@ -80,12 +74,9 @@ export function TransactionsPage() {
       if (applied.dateTo && day > applied.dateTo) return false;
       if (transactionId && !tx.transactionId.toLowerCase().includes(transactionId) && !tx.transactionNo.toLowerCase().includes(transactionId)) return false;
       if (billNo && !tx.billNo.toLowerCase().includes(billNo)) return false;
-      if (applied.direction !== "all" && tx.direction !== applied.direction) return false;
       if (applied.status !== "all" && !matchesDisplayStatus(item.final.status, applied.status)) return false;
       if (applied.source !== "all" && item.final.source !== applied.source) return false;
-      if (applied.level1 !== "all" && item.final.subject?.level1 !== applied.level1) return false;
-      if (applied.level2 !== "all" && item.final.subject?.level2 !== applied.level2) return false;
-      if (applied.level3 !== "all" && item.final.subject?.level3 !== applied.level3) return false;
+      if (subject && !formatSubject(item.final.subject).includes(subject)) return false;
       return true;
     });
   }, [applied, records]);
@@ -95,30 +86,30 @@ export function TransactionsPage() {
       helper.accessor((row) => row.transaction.entityName, {
         id: "entity",
         header: "主体名称",
-        cell: (info) => dash(info.getValue()),
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-44" />,
       }),
       helper.accessor((row) => row.transaction.account, {
         id: "account",
         header: "账户号",
-        cell: (info) => <span className="block max-w-44 truncate">{dash(info.getValue())}</span>,
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
+      }),
+      helper.accessor((row) => row.transaction.accountName, {
+        id: "accountName",
+        header: "账户名",
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
       }),
       helper.accessor((row) => row.transaction.platform, {
         id: "platform",
-        header: "平台",
+        header: "收款机构",
         cell: (info) => displayPlatform(info.getValue()),
       }),
-      helper.accessor((row) => row.transaction.transactionTime, {
-        id: "time",
-        header: "发生日期",
-        cell: (info) => formatDateTime(info.getValue()),
-      }),
-      helper.accessor((row) => row.transaction.transactionDescription, {
-        id: "info",
-        header: "交易信息",
+      helper.accessor((row) => row.transaction.transactionId, {
+        id: "transactionId",
+        header: "交易号",
         cell: (info) => (
           <Tooltip content={info.getValue()}>
             <button
-              className="block max-w-64 truncate text-left text-brand-700 hover:underline"
+              className="block max-w-[18rem] truncate text-left text-brand-700 hover:underline"
               onClick={() => setDetailId(info.row.original.transaction.id)}
             >
               {dash(info.getValue())}
@@ -126,15 +117,61 @@ export function TransactionsPage() {
           </Tooltip>
         ),
       }),
-      helper.accessor((row) => row.transaction.channelStatus, {
-        id: "channelStatus",
-        header: "状态",
-        cell: (info) => dash(info.getValue()),
+      helper.accessor((row) => row.transaction.counterpartyAccount, {
+        id: "counterpartyAccount",
+        header: "付款方账号",
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
       }),
-      helper.accessor((row) => row.transaction.accountingType, {
-        id: "accountingType",
-        header: "记账类型",
-        cell: (info) => dash(info.getValue()),
+      helper.accessor((row) => row.transaction.payeeName, {
+        id: "counterpartyName",
+        header: "付款方姓名",
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-36" />,
+      }),
+      helper.accessor((row) => row.transaction.transactionTime, {
+        id: "time",
+        header: "交易时间",
+        cell: (info) => formatDateTime(info.getValue()),
+      }),
+      helper.accessor((row) => row.transaction.currency, { id: "currency", header: "币种" }),
+      helper.accessor((row) => row.transaction, {
+        id: "amount",
+        header: "金额",
+        cell: (info) => {
+          const tx = info.getValue();
+          return (
+            <span className={tx.direction === "in" ? "font-medium text-emerald-600" : "font-medium text-slate-800"}>
+              {formatAmount(tx.amount)}
+            </span>
+          );
+        },
+      }),
+      helper.accessor((row) => row.transaction.availableBalance, {
+        id: "balance",
+        header: "可用余额",
+        cell: (info) => {
+          const value = info.getValue();
+          return <span className="tabular-nums text-slate-700">{value == null ? "—" : formatAmount(value)}</span>;
+        },
+      }),
+      helper.accessor((row) => row.transaction.fee, {
+        id: "fee",
+        header: "手续费",
+        cell: (info) => <span className="tabular-nums text-slate-700">{formatAmount(info.getValue() ?? 0)}</span>,
+      }),
+      helper.accessor((row) => row.transaction.businessType, {
+        id: "businessType",
+        header: "业务类型",
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-36" />,
+      }),
+      helper.accessor((row) => row.transaction.transactionDescription, {
+        id: "info",
+        header: "交易信息",
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-64" />,
+      }),
+      helper.accessor((row) => row.transaction.note, {
+        id: "note",
+        header: "备注",
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
       }),
       helper.accessor((row) => row.final.subject?.level1, {
         id: "l1",
@@ -151,42 +188,26 @@ export function TransactionsPage() {
         header: "三级科目",
         cell: (info) => <SubjectCell value={info.getValue()} />,
       }),
-      helper.accessor((row) => row.transaction.currency, { id: "currency", header: "币种" }),
-      helper.accessor((row) => row.transaction, {
-        id: "amount",
-        header: "金额",
-        cell: (info) => {
-          const tx = info.getValue();
-          return (
-            <span className={tx.direction === "in" ? "font-medium text-emerald-600" : "font-medium text-slate-800"}>
-              {formatAmount(tx.amount)}
-            </span>
-          );
-        },
-      }),
       helper.accessor((row) => row.final.status, {
         id: "matchStatus",
         header: "匹配状态",
-        cell: (info) => <StatusBadge status={info.getValue()} locked={info.row.original.final.locked} />,
+        cell: (info) => <StatusBadge status={info.getValue()} />,
+      }),
+      helper.accessor((row) => row.final.source, {
+        id: "matchSource",
+        header: "匹配来源",
+        cell: (info) => <SourceBadge source={info.getValue()} />,
       }),
       helper.display({
         id: "actions",
         header: "操作",
-        cell: ({ row }) => {
-          const record = row.original;
-          return (
-            <div className="flex items-center gap-3 text-sm">
-              <button className="text-brand-700 hover:underline" onClick={() => setManualId(record.transaction.id)}>
-                标记
-              </button>
-              {record.final.locked ? (
-                <button className="text-brand-700 hover:underline" onClick={() => setUnlockId(record.transaction.id)}>
-                  解锁
-                </button>
-              ) : null}
-            </div>
-          );
-        },
+        cell: ({ row }) => (
+          <div className="flex items-center gap-3 text-sm">
+            <button className="text-brand-700 hover:underline" onClick={() => setManualId(row.original.transaction.id)}>
+              标记
+            </button>
+          </div>
+        ),
       }),
     ],
     [],
@@ -202,11 +223,6 @@ export function TransactionsPage() {
 
   const detail = records.find((item) => item.transaction.id === detailId) ?? null;
   const manual = records.find((item) => item.transaction.id === manualId) ?? null;
-  const level2Options = draft.level1 === "all" ? [] : (tree.level2By1.get(draft.level1) ?? []);
-  const level3Options =
-    draft.level1 === "all" || draft.level2 === "all"
-      ? []
-      : (tree.level3By2.get(`${draft.level1}||${draft.level2}`) ?? []);
 
   const pageIndex = table.getState().pagination.pageIndex;
   const pageCount = table.getPageCount() || 1;
@@ -225,25 +241,32 @@ export function TransactionsPage() {
   };
 
   const exportCsv = () => {
-    const header = ["主体名称", "账户号", "平台", "发生日期", "交易信息", "状态", "记账类型", "一级科目", "二级科目", "三级科目", "币种", "金额", "匹配状态", "标记来源", "交易ID", "账单号", "流水号"];
+    const header = [
+      "主体名称", "账户号", "账户名", "收款机构", "交易号",
+      "付款方账号", "付款方姓名", "交易时间", "币种", "金额", "可用余额", "手续费", "业务类型",
+      "交易信息", "备注", "一级科目", "二级科目", "三级科目", "匹配状态", "匹配来源",
+    ];
     const lines = filtered.map((item) => [
       item.transaction.entityName,
       item.transaction.account,
+      item.transaction.accountName,
       displayPlatform(item.transaction.platform),
+      item.transaction.transactionId,
+      item.transaction.counterpartyAccount,
+      item.transaction.payeeName,
       formatDateTime(item.transaction.transactionTime),
+      item.transaction.currency,
+      formatAmount(item.transaction.amount),
+      item.transaction.availableBalance == null ? "" : formatAmount(item.transaction.availableBalance),
+      formatAmount(item.transaction.fee ?? 0),
+      item.transaction.businessType,
       item.transaction.transactionDescription,
-      item.transaction.channelStatus,
-      item.transaction.accountingType,
+      item.transaction.note,
       item.final.subject?.level1 ?? "",
       item.final.subject?.level2 ?? "",
       item.final.subject?.level3 ?? "",
-      item.transaction.currency,
-      formatAmount(item.transaction.amount),
       DISPLAY_STATUS_LABEL[toDisplayStatus(item.final.status)],
       SOURCE_LABEL[item.final.source],
-      item.transaction.transactionId,
-      item.transaction.billNo,
-      item.transaction.transactionNo,
     ].map(csvCell).join(","));
     const blob = new Blob(["\uFEFF" + [header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -267,60 +290,61 @@ export function TransactionsPage() {
         </div>
 
         <div className="rounded-md border border-slate-200 bg-white p-4">
-          <div className="grid grid-cols-3 gap-x-6 gap-y-3">
-            <FilterSelect label="主体名称" value={draft.entityName} onChange={(entityName) => setDraft({ ...draft, entityName })} options={entities.map((item) => ({ value: item, label: item }))} />
-            <FilterSelect label="账户号" value={draft.account} onChange={(account) => setDraft({ ...draft, account })} options={accounts.map((item) => ({ value: item, label: item }))} />
-            <FilterSelect label="平台" value={draft.platform} onChange={(platform) => setDraft({ ...draft, platform })} options={platforms.map((item) => ({ value: item, label: displayPlatform(item) }))} />
-            <div className="space-y-1.5">
-              <Label>交易时间</Label>
-              <div className="flex items-center gap-2">
-                <Input type="date" value={draft.dateFrom} onChange={(e) => setDraft({ ...draft, dateFrom: e.target.value })} />
-                <span className="text-slate-400">→</span>
-                <Input type="date" value={draft.dateTo} onChange={(e) => setDraft({ ...draft, dateTo: e.target.value })} />
-              </div>
+          <div className="flex items-end gap-6">
+            <div className="grid min-w-0 flex-1 grid-cols-3 gap-x-6">
+              <FilterSelect label="主体名称" value={draft.entityName} onChange={(entityName) => setDraft({ ...draft, entityName })} options={entities.map((item) => ({ value: item, label: item }))} />
+              <FilterSelect label="账户号" value={draft.account} onChange={(account) => setDraft({ ...draft, account })} options={accounts.map((item) => ({ value: item, label: item }))} />
+              <FilterSelect label="收款机构" value={draft.platform} onChange={(platform) => setDraft({ ...draft, platform })} options={platforms.map((item) => ({ value: item, label: displayPlatform(item) }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label>交易ID</Label>
-              <Input value={draft.transactionId} placeholder="请输入" onChange={(e) => setDraft({ ...draft, transactionId: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>账单号</Label>
-              <Input value={draft.billNo} placeholder="请输入" onChange={(e) => setDraft({ ...draft, billNo: e.target.value })} />
+            <div className="flex shrink-0 items-center gap-4 pb-0.5">
+              <Button onClick={search}>查询</Button>
+              <button className="text-sm text-slate-600 hover:text-ink" onClick={reset}>重置</button>
+              <Button variant="secondary" onClick={exportCsv}>导出</Button>
+              <button className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-ink" onClick={() => setExpanded((value) => !value)}>
+                {expanded ? "收起" : "展开"}
+                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
             </div>
           </div>
           {expanded ? (
-            <div className="mt-3 grid grid-cols-3 gap-x-6 gap-y-3 border-t border-slate-100 pt-3">
+            <div className="mt-3 grid grid-cols-3 gap-x-6 gap-y-3">
+              <div className="space-y-1.5">
+                <Label>交易时间</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={draft.dateFrom} onChange={(e) => setDraft({ ...draft, dateFrom: e.target.value })} />
+                  <span className="text-slate-400">→</span>
+                  <Input type="date" value={draft.dateTo} onChange={(e) => setDraft({ ...draft, dateTo: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>交易号</Label>
+                <Input value={draft.transactionId} placeholder="请输入" onChange={(e) => setDraft({ ...draft, transactionId: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>账单号</Label>
+                <Input value={draft.billNo} placeholder="请输入" onChange={(e) => setDraft({ ...draft, billNo: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>科目</Label>
+                <Input
+                  value={draft.subject}
+                  placeholder="请输入"
+                  onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === "Enter") search(); }}
+                />
+              </div>
               <FilterSelect label="匹配状态" value={draft.status} onChange={(status) => setDraft({ ...draft, status })} options={DISPLAY_STATUS_OPTIONS} />
-              <FilterSelect label="标记来源" value={draft.source} onChange={(source) => setDraft({ ...draft, source })} options={Object.entries(SOURCE_LABEL).map(([value, label]) => ({ value, label }))} />
-              <FilterSelect label="收支方向" value={draft.direction} onChange={(direction) => setDraft({ ...draft, direction })} options={[{ value: "in", label: "收入" }, { value: "out", label: "支出" }]} />
-              <FilterSelect label="一级科目" value={draft.level1} onChange={(level1) => setDraft({ ...draft, level1, level2: "all", level3: "all" })} options={tree.level1.map((item) => ({ value: item, label: item }))} />
-              <FilterSelect label="二级科目" value={draft.level2} onChange={(level2) => setDraft({ ...draft, level2, level3: "all" })} options={level2Options.map((item) => ({ value: item, label: item }))} />
-              <FilterSelect label="三级科目" value={draft.level3} onChange={(level3) => setDraft({ ...draft, level3 })} options={level3Options.map((item) => ({ value: item, label: item }))} />
+              <FilterSelect label="匹配来源" value={draft.source} onChange={(source) => setDraft({ ...draft, source })} options={Object.entries(SOURCE_LABEL).map(([value, label]) => ({ value, label }))} />
             </div>
           ) : null}
-          <div className="mt-4 flex items-center gap-4">
-            <Button onClick={search}>搜索</Button>
-            <button className="text-sm text-slate-600 hover:text-ink" onClick={reset}>重置</button>
-            <button className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-ink" onClick={() => setExpanded((value) => !value)}>
-              {expanded ? "收起" : "展开"}
-              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button onClick={exportCsv}>
-            <Download className="h-4 w-4" />
-            导出数据
-          </Button>
         </div>
 
         <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
           {filtered.length === 0 ? (
-            <div className="p-6"><EmptyState title="没有符合条件的流水" description="请调整筛选条件后重新搜索。" /></div>
+            <div className="p-6"><EmptyState title="没有符合条件的流水" description="请调整筛选条件后重新查询。" /></div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[1680px] w-full text-left text-sm">
+              <table className="min-w-[2800px] w-full text-left text-sm">
                 <thead className="bg-[#fafafa] text-xs text-slate-600">
                   {table.getHeaderGroups().map((group) => (
                     <tr key={group.id}>
@@ -375,20 +399,8 @@ export function TransactionsPage() {
           open={Boolean(detail)}
           onOpenChange={(open) => { if (!open) setDetailId(null); }}
           onManual={() => { if (detail) setManualId(detail.transaction.id); }}
-          onUnlock={() => { if (detail) setUnlockId(detail.transaction.id); }}
         />
         <ManualMarkDialog record={manual} open={Boolean(manual)} onOpenChange={(open) => { if (!open) setManualId(null); }} />
-        <AlertDialog open={Boolean(unlockId)} onOpenChange={(open) => { if (!open) setUnlockId(null); }}>
-          <AlertDialogContent
-            title="确认解除人工锁定？"
-            description="解除后将重新按飞书优先、渠道规则其次计算最终科目。飞书审批不会失效；若科目仍不正确，请继续使用人工标记。"
-            confirmText="解除锁定"
-            onConfirm={() => {
-              if (unlockId) unlockManual(unlockId);
-              setUnlockId(null);
-            }}
-          />
-        </AlertDialog>
       </div>
     </TooltipProvider>
   );
@@ -396,7 +408,16 @@ export function TransactionsPage() {
 
 function SubjectCell({ value }: { value: string | null | undefined }) {
   if (!value) return <span className="text-slate-400">-</span>;
-  return <span className="inline-flex rounded bg-rose-50 px-1.5 py-0.5 text-xs text-rose-600">{value}</span>;
+  return <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">{value}</span>;
+}
+
+function TextCell({ value, width = "max-w-40" }: { value: string | null | undefined; width?: string }) {
+  const text = dash(value);
+  return (
+    <span className={cn("block truncate", width)} title={text === "—" ? undefined : text}>
+      {text}
+    </span>
+  );
 }
 
 function FilterSelect({

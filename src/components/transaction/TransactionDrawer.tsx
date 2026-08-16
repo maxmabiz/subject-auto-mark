@@ -1,147 +1,141 @@
 import { SourceBadge, StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { DIRECTION_LABEL } from "@/domain/constants";
+import { displayPlatform } from "@/domain/constants";
 import { formatSubject } from "@/domain/matching";
 import type { EnrichedTransaction } from "@/domain/types";
-import { dash, formatDateTime, formatMoney } from "@/lib/format";
+import { dash, formatAmount, formatDateTime, formatMoney } from "@/lib/format";
 import { useAppStore } from "@/store/AppStore";
-import { CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs text-muted">{label}</div>
-      <div className="mt-1 break-all text-sm text-ink">{value}</div>
-    </div>
-  );
-}
 
 export function TransactionDrawer({
   record,
   open,
   onOpenChange,
   onManual,
-  onUnlock,
 }: {
   record: EnrichedTransaction | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onManual: () => void;
-  onUnlock: () => void;
 }) {
   const { logsFor } = useAppStore();
   const logs = record ? logsFor(record.transaction.id) : [];
   const tx = record?.transaction;
+  const infoRows = tx ? transactionRows(record) : [];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent title={tx ? `流水详情 ${tx.transactionNo}` : "流水详情"}>
+      <SheetContent className="w-[480px]" title="流水详情">
         {record && tx ? (
-          <div className="flex-1 space-y-5 overflow-auto px-5 py-4">
-            <section>
-              <h4 className="mb-3 text-sm font-semibold">原始流水信息</h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border border-slate-200 p-4">
-                <Field label="主体名称" value={dash(tx.entityName)} />
-                <Field label="账户号" value={dash(tx.account)} />
-                <Field label="平台" value={dash(tx.platform)} />
-                <Field label="发生日期" value={formatDateTime(tx.transactionTime)} />
-                <Field label="交易ID" value={dash(tx.transactionId)} />
-                <Field label="账单号" value={dash(tx.billNo)} />
-                <Field label="流水号" value={dash(tx.transactionNo)} />
-                <Field label="状态" value={dash(tx.channelStatus)} />
-                <Field label="记账类型" value={dash(tx.accountingType)} />
-                <Field label="收支方向" value={DIRECTION_LABEL[tx.direction]} />
-                <Field label="金额和币种" value={formatMoney(tx.amount, tx.currency)} />
-                <Field label="交易信息" value={dash(tx.transactionDescription)} />
-                <Field label="备注" value={dash(tx.note)} />
-                <Field label="业务类型" value={dash(tx.businessType)} />
-                <Field label="code 类型" value={dash(tx.codeType)} />
-                <Field label="收款人姓名" value={dash(tx.payeeName)} />
-                <Field label="电商平台/支付网关" value={dash(tx.paymentGateway)} />
-                <Field label="交易类型" value={dash(tx.transactionType)} />
-                <Field label="飞书审批单号" value={dash(tx.feishuApprovalId)} />
-                <Field label="飞书关联字段" value="流水号" />
-              </div>
-            </section>
-            <section>
-              <h4 className="mb-3 text-sm font-semibold">当前最终科目</h4>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <div className="text-base font-medium">{formatSubject(record.final.subject)}</div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <StatusBadge status={record.final.status} locked={record.final.locked} />
-                  <SourceBadge source={record.final.source} locked={record.final.locked} />
-                  <span className="text-xs text-muted">更新时间 {formatDateTime(record.final.updatedAt)}</span>
+          <div className="flex-1 overflow-auto px-5 py-4">
+            <div className="text-sm font-medium text-ink">{tx.transactionId || tx.transactionNo}</div>
+            <div className="mt-1 text-sm text-slate-500">
+              {displayPlatform(tx.platform)} · {formatMoney(tx.amount, tx.currency)}
+            </div>
+
+            <section className="mt-6">
+              <h4 className="mb-3 text-sm font-semibold">科目</h4>
+              <div className="rounded-lg border border-slate-200 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={record.final.status} />
+                  <SourceBadge source={record.final.source} />
                 </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{record.final.explanation}</p>
+                <div className="mt-3 space-y-2">
+                  <Row label="一级科目" value={dash(record.final.subject?.level1)} />
+                  <Row label="二级科目" value={dash(record.final.subject?.level2)} />
+                  <Row label="三级科目" value={dash(record.final.subject?.level3)} />
+                </div>
+                <div className="mt-3 text-xs leading-5 text-slate-500">{matchReason(record)}</div>
               </div>
             </section>
-            <section>
-              <h4 className="mb-3 text-sm font-semibold">来源判断</h4>
-              <div className="grid grid-cols-3 gap-3">
-                {[{
-                  title: "人工标记",
-                  adopted: record.final.source === "manual",
-                  body: record.manual
-                    ? `${formatSubject(record.manual.subject)}\n${record.manual.locked ? "已锁定" : "未锁定"} · ${record.manual.reason}`
-                    : "无人工标记",
-                }, {
-                  title: "飞书审批",
-                  adopted: record.final.source === "feishu",
-                  body: record.feishu
-                    ? `${formatSubject(record.feishu.subject)}\n按流水号 ${record.feishu.transactionNo} 关联 · ${record.feishu.approvalType} · ${record.feishu.approvalId}`
-                    : "无飞书审批结果",
-                }, {
-                  title: "渠道规则",
-                  adopted: record.final.source === "channel",
-                  body: record.channel.subject
-                    ? `${formatSubject(record.channel.subject)}\n${record.channel.explanation}`
-                    : record.channel.explanation,
-                }].map((item) => (
-                  <div key={item.title} className={cn("rounded-lg border p-3", item.adopted ? "border-brand-300 bg-brand-50" : "border-slate-200 bg-white")}>
-                    <div className="mb-2 flex items-center justify-between text-sm font-medium">
-                      {item.title}
-                      {item.adopted ? <CheckCircle2 className="h-4 w-4 text-brand-700" /> : null}
-                    </div>
-                    <div className="whitespace-pre-line text-xs leading-5 text-slate-600">{item.body}</div>
-                    {item.title === "渠道规则" && record.channel.candidates.length > 1 ? (
-                      <div className="mt-2 space-y-1 text-xs text-muted">
-                        {record.channel.candidates.slice(0, 4).map((candidate) => (
-                          <div key={candidate.ruleId}>
-                            {candidate.ruleId} · {candidate.keyword} → {formatSubject(candidate.subject)}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
+
+            <section className="mt-6">
+              <h4 className="mb-3 text-sm font-semibold">流水信息</h4>
+              <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 px-4">
+                {infoRows.map((item) => (
+                  <Row key={item.label} label={item.label} value={item.value} />
                 ))}
               </div>
             </section>
-            <section>
-              <h4 className="mb-3 text-sm font-semibold">操作记录</h4>
-              <ol className="space-y-3 border-l border-slate-200 pl-4">
-                {logs.length ? logs.map((log) => (
-                  <li key={log.id}>
-                    <div className="text-sm font-medium">{log.action}</div>
-                    <div className="text-xs text-muted">{formatDateTime(log.time)} · {log.actor}</div>
-                    <div className="mt-1 text-xs text-slate-600">
-                      {formatSubject(log.fromSubject)} → {formatSubject(log.toSubject)}
-                    </div>
-                    <div className="text-xs text-muted">{log.reason}</div>
-                  </li>
-                )) : <div className="text-sm text-muted">暂无操作记录</div>}
-              </ol>
+
+            <section className="mt-6">
+              <h4 className="mb-3 text-sm font-semibold">变更记录</h4>
+              {logs.length ? (
+                <ol className="space-y-5 border-l border-slate-200 pl-4">
+                  {logs.map((log) => (
+                    <li key={log.id} className="relative">
+                      <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-brand-600 ring-1 ring-slate-200" />
+                      <div className="text-sm font-medium">{log.action === "流水进入系统" ? "流水创建时间" : log.action}</div>
+                      <div className="text-xs text-muted">{formatDateTime(log.time)} · {log.actor}</div>
+                      {log.fromSubject || log.toSubject ? (
+                        <div className="mt-1 text-xs text-slate-600">
+                          {formatSubject(log.fromSubject)} → {formatSubject(log.toSubject)}
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="text-sm text-muted">暂无变更记录</div>
+              )}
             </section>
           </div>
         ) : null}
-        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
-          {record?.final.locked ? (
-            <Button variant="secondary" onClick={onUnlock}>解除锁定</Button>
-          ) : null}
-          <Button onClick={onManual}>人工标记</Button>
+        <div className="flex justify-end border-t border-slate-200 px-5 py-3">
+          <Button onClick={onManual}>标记</Button>
         </div>
       </SheetContent>
     </Sheet>
   );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5">
+      <div className="shrink-0 text-xs text-slate-400">{label}</div>
+      <div className="min-w-0 break-all text-right text-sm text-ink">{value}</div>
+    </div>
+  );
+}
+
+function transactionRows(record: EnrichedTransaction): { label: string; value: string }[] {
+  const tx = record.transaction;
+  const rows = [
+    { label: "交易号", value: dash(tx.transactionId) },
+    { label: "主体名称", value: dash(tx.entityName) },
+    { label: "账户号", value: dash(tx.account) },
+    { label: "账户名", value: dash(tx.accountName) },
+    { label: "收款机构", value: displayPlatform(tx.platform) },
+    { label: "交易时间", value: formatDateTime(tx.transactionTime) },
+    { label: "币种", value: dash(tx.currency) },
+    { label: "金额", value: formatMoney(tx.amount, tx.currency) },
+    { label: "可用余额", value: tx.availableBalance == null ? "" : formatAmount(tx.availableBalance) },
+    { label: "手续费", value: tx.fee ? formatAmount(tx.fee) : "" },
+    { label: "付款方账号", value: tx.counterpartyAccount.trim() },
+    { label: "付款方姓名", value: tx.payeeName.trim() },
+    { label: "交易信息", value: dash(tx.transactionDescription) },
+    { label: "备注", value: tx.note.trim() },
+    { label: "业务类型", value: tx.businessType.trim() },
+    { label: "code 类型", value: tx.codeType.trim() },
+    { label: "支付网关", value: tx.paymentGateway.trim() },
+    { label: "交易类型", value: tx.transactionType.trim() },
+    { label: "飞书审批单号", value: tx.feishuApprovalId.trim() },
+  ];
+  return rows.filter((item) => item.value);
+}
+
+function matchReason(record: EnrichedTransaction): string {
+  const { final, manual, feishu, channel } = record;
+  if (final.source === "manual" && manual) return manual.reason;
+  if (final.source === "feishu" && feishu) return `${feishu.approvalName} / ${feishu.paymentType}`;
+  if (final.source === "channel" && final.matchedField && final.matchedKeyword) {
+    return `${final.matchedField}「${final.matchedKeyword}」`;
+  }
+  if (final.status === "rule_conflict") {
+    const subjects = [...new Set(channel.candidates.slice(0, 3).map((item) => formatSubject(item.subject)))];
+    return subjects.length ? `规则冲突：${subjects.join("；")}` : "多条规则命中不同科目";
+  }
+  if (final.status === "data_error") return channel.errors[0] || "缺少匹配所需字段";
+  if (!final.subject) return "未命中规则";
+  return "";
 }

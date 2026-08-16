@@ -7,50 +7,45 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
-import { ChannelRuleDialog } from "@/components/rules/ChannelRuleDialog";
-import { ChannelRuleLogDrawer } from "@/components/rules/ChannelRuleLogDrawer";
-import { TEMPLATE_PATH, displayPlatform } from "@/domain/constants";
-import { parseRuleWorkbook } from "@/domain/excel/parse";
-import { validateParsedRules } from "@/domain/excel/validate";
+import { ApprovalRuleDialog } from "@/components/approval/ApprovalRuleDialog";
+import { ApprovalRuleLogDrawer } from "@/components/approval/ApprovalRuleLogDrawer";
+import { APPROVAL_TEMPLATE_PATH } from "@/domain/constants";
+import { parseApprovalWorkbook } from "@/domain/excel/parseApproval";
 import { formatSubject } from "@/domain/matching";
-import { hydrateChannelRule } from "@/domain/channel/rule";
-import type { Rule } from "@/domain/types";
+import type { ApprovalRule } from "@/domain/types";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/AppStore";
 
-const emptyFilters = { platform: "all", account: "all", field: "all", keyword: "", subject: "", createdFrom: "", createdTo: "" };
+const emptyFilters = { name: "all", templateId: "", paymentType: "", subject: "", createdFrom: "", createdTo: "" };
 
-export function RulesPage() {
-  const { loading, error, rules, deleteChannelRule, importChannelRules } = useAppStore();
+export function ApprovalRulesPage() {
+  const { loading, error, approvalRules, deleteApprovalRule, importApprovalRules } = useAppStore();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [editing, setEditing] = useState<Rule | null | "new">(null);
-  const [logRule, setLogRule] = useState<Rule | null>(null);
+  const [editing, setEditing] = useState<ApprovalRule | null | "new">(null);
+  const [logRule, setLogRule] = useState<ApprovalRule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [draft, setDraft] = useState(emptyFilters);
   const [applied, setApplied] = useState(emptyFilters);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
-  const platforms = useMemo(() => [...new Set(rules.map((item) => item.platform).filter(Boolean))], [rules]);
-  const accounts = useMemo(() => [...new Set(rules.map((item) => item.account).filter(Boolean))], [rules]);
-  const fields = useMemo(() => [...new Set(rules.map((item) => item.searchField).filter(Boolean))], [rules]);
-
+  const names = useMemo(() => [...new Set(approvalRules.map((item) => item.approvalName).filter(Boolean))], [approvalRules]);
   const filtered = useMemo(() => {
-    const keyword = applied.keyword.trim().toLowerCase();
+    const paymentType = applied.paymentType.trim();
     const subject = applied.subject.trim();
-    return rules.filter((rule) => {
-      if (applied.platform !== "all" && rule.platform !== applied.platform) return false;
-      if (applied.account !== "all" && rule.account !== applied.account) return false;
-      if (applied.field !== "all" && rule.searchField !== applied.field) return false;
-      if (keyword && !rule.keyword.toLowerCase().includes(keyword)) return false;
+    const templateId = applied.templateId.trim().toLowerCase();
+    return approvalRules.filter((rule) => {
+      if (applied.name !== "all" && rule.approvalName !== applied.name) return false;
+      if (templateId && !rule.templateId.toLowerCase().includes(templateId)) return false;
+      if (paymentType && !rule.paymentType.includes(paymentType)) return false;
       if (subject && !formatSubject(rule.subject).includes(subject)) return false;
       const createdDay = formatDate(rule.createdAt);
       if (applied.createdFrom && createdDay !== "—" && createdDay < applied.createdFrom) return false;
       if (applied.createdTo && createdDay !== "—" && createdDay > applied.createdTo) return false;
       return true;
     });
-  }, [rules, applied]);
+  }, [approvalRules, applied]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safeIndex = Math.min(pageIndex, pageCount - 1);
@@ -70,27 +65,16 @@ export function RulesPage() {
 
   const onImport = async (file: File) => {
     const buffer = await file.arrayBuffer();
-    const parsed = parseRuleWorkbook(buffer, {
-      fileName: file.name,
-      fileSize: file.size,
-      uploadedAt: new Date().toISOString(),
-    });
+    const parsed = parseApprovalWorkbook(buffer);
     if (parsed.errors.length) {
       toast.error(parsed.errors.join("；"));
       return;
     }
-    const validated = validateParsedRules(parsed.rows, "");
-    const valid = validated.rules.filter((item) => item.validationStatus !== "error").map(hydrateChannelRule);
-    if (!valid.length) {
-      toast.error("没有可导入的完整规则");
-      return;
-    }
-    importChannelRules(valid);
-    if (validated.error) toast.message(`已跳过 ${validated.error} 条不完整规则`);
+    importApprovalRules(parsed.rules);
     setPageIndex(0);
   };
 
-  const deletingRule = rules.find((item) => item.id === deleteId) ?? null;
+  const deletingRule = approvalRules.find((item) => item.id === deleteId) ?? null;
   const usedCount = deletingRule?.matchedCountT1 ?? 0;
   const deletingInUse = usedCount > 0;
 
@@ -98,14 +82,14 @@ export function RulesPage() {
   if (error) return <ErrorState message={error} />;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-xs text-muted">Fund / 科目匹配规则 / 平台规则</div>
-          <h1 className="mt-0.5 text-xl font-semibold tracking-tight">平台规则</h1>
+          <div className="text-xs text-muted">Fund / 科目匹配规则 / 审批单规则</div>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight">审批单规则</h1>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <a href={TEMPLATE_PATH} download>
+        <div className="flex shrink-0 items-center gap-2 pt-4">
+          <a href={APPROVAL_TEMPLATE_PATH} download>
             <Button variant="secondary">下载模板</Button>
           </a>
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>
@@ -130,40 +114,30 @@ export function RulesPage() {
         </div>
       </div>
 
-      <div className="rounded-md border border-slate-200 bg-white px-5 py-4">
-        <div className="grid grid-cols-4 gap-x-5 gap-y-3">
-          <FilterField label="平台">
-            <Select value={draft.platform} onValueChange={(platform) => setDraft({ ...draft, platform })}>
+      <div className="rounded-lg border border-slate-200 bg-white">
+        <div className="grid grid-cols-4 gap-x-4 gap-y-3 p-4">
+          <FilterField label="审批单名称">
+            <Select value={draft.name} onValueChange={(name) => setDraft({ ...draft, name })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部</SelectItem>
-                {platforms.map((item) => <SelectItem key={item} value={item}>{displayPlatform(item)}</SelectItem>)}
+                {names.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
               </SelectContent>
             </Select>
           </FilterField>
-          <FilterField label="账号">
-            <Select value={draft.account} onValueChange={(account) => setDraft({ ...draft, account })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {accounts.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="检索字段">
-            <Select value={draft.field} onValueChange={(field) => setDraft({ ...draft, field })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {fields.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="关键词">
+          <FilterField label="模板ID">
             <Input
-              value={draft.keyword}
+              value={draft.templateId}
               placeholder="请输入"
-              onChange={(e) => setDraft({ ...draft, keyword: e.target.value })}
+              onChange={(e) => setDraft({ ...draft, templateId: e.target.value })}
+              onKeyDown={(e) => { if (e.key === "Enter") search(); }}
+            />
+          </FilterField>
+          <FilterField label="付款申请类型">
+            <Input
+              value={draft.paymentType}
+              placeholder="请输入"
+              onChange={(e) => setDraft({ ...draft, paymentType: e.target.value })}
               onKeyDown={(e) => { if (e.key === "Enter") search(); }}
             />
           </FilterField>
@@ -182,60 +156,70 @@ export function RulesPage() {
               <Input type="date" value={draft.createdTo} onChange={(e) => setDraft({ ...draft, createdTo: e.target.value })} />
             </div>
           </FilterField>
-          <div className="flex items-end justify-end gap-2">
+          <div className="col-span-2 flex items-end justify-end gap-2">
             <Button onClick={search}>查询</Button>
             <Button variant="secondary" onClick={reset}>重置</Button>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         {filtered.length === 0 ? (
-          <div className="p-8"><EmptyState title="没有符合条件的平台规则" description="请调整筛选条件后重新查询，或新增规则、导入 Excel。" /></div>
+          <div className="p-10"><EmptyState title="没有符合条件的审批单规则" description="请调整筛选条件后重新查询，或新增规则、导入 Excel。" /></div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] text-left text-sm leading-5">
+            <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[11%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
+                <col className="w-[10%]" />
+              </colgroup>
               <thead>
-                <tr className="border-b border-slate-200 bg-[#fafafa] text-xs text-slate-500">
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">平台</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">账号</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">检索字段</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">检索关键词</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">一级科目</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">二级科目</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">三级科目</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 text-center font-medium" title="已匹配条数（T-1）">已匹配（T-1）</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">创建时间</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">最后修改</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">操作</th>
+                <tr className="bg-[#f7f8fb] text-xs text-slate-500">
+                  <th className="px-3 py-3 font-medium">审批单名称</th>
+                  <th className="px-3 py-3 font-medium">模板ID</th>
+                  <th className="px-3 py-3 font-medium">付款申请类型</th>
+                  <th className="px-3 py-3 font-medium">一级科目</th>
+                  <th className="px-3 py-3 font-medium">二级科目</th>
+                  <th className="px-3 py-3 font-medium">三级科目</th>
+                  <th className="whitespace-nowrap px-1 py-3 text-center font-medium">已匹配条数（T-1）</th>
+                  <th className="px-3 py-3 font-medium">创建时间</th>
+                  <th className="px-3 py-3 font-medium">最后修改</th>
+                  <th className="px-3 py-3 font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {paged.map((rule) => (
-                  <tr key={rule.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80">
-                    <td className="whitespace-nowrap px-3 py-2 align-middle font-medium text-ink">{displayPlatform(rule.platform)}</td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[9.5rem] truncate text-slate-700" title={rule.account}>{rule.account}</div>
+                  <tr key={rule.id} className="border-t border-slate-100 hover:bg-slate-50/80">
+                    <td className="px-3 py-3 align-middle font-medium text-ink">{rule.approvalName}</td>
+                    <td className="px-3 py-3 align-middle">
+                      <span className="block truncate font-mono text-xs text-slate-500" title={rule.templateId}>
+                        {compactId(rule.templateId)}
+                      </span>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 align-middle text-slate-700">{rule.searchField || "—"}</td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[13rem] truncate text-slate-700" title={rule.keyword}>{rule.keyword}</div>
+                    <td className="px-3 py-3 align-middle text-slate-700">{rule.paymentType}</td>
+                    <td className="px-3 py-3 align-middle">
+                      <span className="block truncate text-slate-700" title={rule.subject?.level1 || undefined}>{dashPart(rule.subject?.level1)}</span>
                     </td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[8.5rem]"><SubjectCell value={rule.subject.level1} /></div>
+                    <td className="px-3 py-3 align-middle">
+                      <span className="block truncate text-slate-700" title={rule.subject?.level2 || undefined}>{dashPart(rule.subject?.level2)}</span>
                     </td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[10rem]"><SubjectCell value={rule.subject.level2} /></div>
+                    <td className="px-3 py-3 align-middle">
+                      <span className="block truncate text-slate-700" title={rule.subject?.level3 || undefined}>{dashPart(rule.subject?.level3)}</span>
                     </td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[11rem]"><SubjectCell value={rule.subject.level3} /></div>
-                    </td>
-                    <td className="px-3 py-2 text-center align-middle tabular-nums">
+                    <td className="px-1 py-3 text-center align-middle tabular-nums">
                       <span className={rule.matchedCountT1 ? "text-ink" : "text-slate-400"}>{rule.matchedCountT1 ?? 0}</span>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 align-middle tabular-nums text-slate-500">{formatDate(rule.createdAt)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 align-middle tabular-nums text-slate-500">{formatDate(rule.updatedAt)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 align-middle">
+                    <td className="px-3 py-3 align-middle text-slate-500">{formatDate(rule.createdAt)}</td>
+                    <td className="px-3 py-3 align-middle text-slate-500">{formatDate(rule.updatedAt)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 align-middle">
                       <div className="flex items-center gap-2.5">
                         <button className="text-brand-700 hover:underline" onClick={() => setEditing(rule)}>编辑</button>
                         <button className="text-red-600 hover:underline" onClick={() => setDeleteId(rule.id)}>删除</button>
@@ -248,7 +232,7 @@ export function RulesPage() {
             </table>
           </div>
         )}
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 text-sm text-slate-500">
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
           <span>共 {filtered.length} 条</span>
           <div className="flex items-center gap-3">
             <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPageIndex(0); }}>
@@ -274,19 +258,19 @@ export function RulesPage() {
         </div>
       </div>
 
-      <ChannelRuleDialog
+      <ApprovalRuleDialog
         open={editing !== null}
         rule={editing === "new" ? null : editing}
         onOpenChange={(open) => { if (!open) setEditing(null); }}
       />
-      <ChannelRuleLogDrawer
+      <ApprovalRuleLogDrawer
         rule={logRule}
         open={logRule !== null}
         onOpenChange={(open) => { if (!open) setLogRule(null); }}
       />
       <AlertDialog open={Boolean(deleteId)} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
         <AlertDialogContent
-          title={deletingInUse ? "该规则正在被流水使用，确认删除？" : "确认删除该平台规则？"}
+          title={deletingInUse ? "该规则正在被流水使用，确认删除？" : "确认删除该审批单规则？"}
           description={
             deletingInUse
               ? `当前有 ${usedCount} 条流水正在使用该规则。删除后新流水将不再匹配这条规则，已匹配流水会保留当前科目。可选择继续删除或取消。`
@@ -296,7 +280,7 @@ export function RulesPage() {
           cancelText="取消"
           danger
           onConfirm={() => {
-            if (deleteId) deleteChannelRule(deleteId);
+            if (deleteId) deleteApprovalRule(deleteId);
             setDeleteId(null);
           }}
         />
@@ -316,20 +300,20 @@ function FilterField({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label>{label}</Label>
+      <Label className="text-xs font-medium text-slate-500">{label}</Label>
       {children}
     </div>
   );
 }
 
-function SubjectCell({ value }: { value: string | null | undefined }) {
+function dashPart(value: string | null | undefined): string {
   const text = value?.trim();
-  if (!text) return <span className="text-slate-400">—</span>;
-  return (
-    <span className="inline-block max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 align-middle text-xs leading-5 text-slate-700" title={text}>
-      {text}
-    </span>
-  );
+  return text || "—";
+}
+
+function compactId(id: string): string {
+  if (id.length <= 18) return id;
+  return `${id.slice(0, 8)}…${id.slice(-6)}`;
 }
 
 function PageBtn({
