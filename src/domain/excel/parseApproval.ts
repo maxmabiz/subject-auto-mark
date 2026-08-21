@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { ApprovalRule } from "../types";
+import { formatOtherDimension, independentStationDimension } from "../approval/dimension";
 import { mockTemplateId } from "../approval/templateId";
 import { cellToString, isBlank } from "../matching/normalize";
 
@@ -20,6 +21,7 @@ function toRule(input: {
   approvalName: string;
   templateId: string;
   paymentType: string;
+  otherDimension: string;
   level1: string;
   level2: string;
   level3: string;
@@ -41,6 +43,7 @@ function toRule(input: {
     approvalName: input.approvalName,
     templateId: input.templateId,
     paymentType: input.paymentType,
+    otherDimension: input.otherDimension,
     subject: input.level1 ? { level1: input.level1, level2: input.level2, level3: input.level3 || null } : null,
     validationStatus,
     errors,
@@ -73,6 +76,7 @@ export function parseApprovalWorkbook(buffer: ArrayBuffer): { rules: ApprovalRul
   let lastSeq = "";
   let lastName = "";
   let lastTemplateId = "";
+  let lastOtherDimension = "";
   const nameToId = new Map<string, string>();
   const rules: ApprovalRule[] = [];
 
@@ -81,17 +85,22 @@ export function parseApprovalWorkbook(buffer: ArrayBuffer): { rules: ApprovalRul
     const name = get(r, "飞书审批单名称");
     const templateFromFile = get(r, "飞书审批单模板ID");
     const paymentType = get(r, "付款申请类型");
+    const explicitDimension = get(r, "其它维度");
+    const independentStation = get(r, "是否独立站");
     const level1 = get(r, "一级科目");
     const level2 = get(r, "二级科目");
     const level3 = get(r, "三级科目");
     if (seq) lastSeq = seq;
     if (name) {
       lastName = name;
+      lastOtherDimension = "";
       if (!nameToId.has(name)) {
         nameToId.set(name, templateFromFile.length === 32 ? templateFromFile : mockTemplateId(name));
       }
       lastTemplateId = nameToId.get(name)!;
     }
+    if (explicitDimension) lastOtherDimension = formatOtherDimension("独立站", explicitDimension);
+    else if (independentStation) lastOtherDimension = independentStationDimension(independentStation);
     if (!paymentType && !level1 && !name) continue;
     rules.push(
       toRule({
@@ -101,6 +110,7 @@ export function parseApprovalWorkbook(buffer: ArrayBuffer): { rules: ApprovalRul
         approvalName: lastName,
         templateId: lastTemplateId,
         paymentType,
+        otherDimension: lastOtherDimension,
         level1,
         level2,
         level3,
@@ -118,6 +128,7 @@ export function buildApprovalRule(input: {
   approvalName: string;
   templateId: string;
   paymentType: string;
+  otherDimension?: string;
   level1: string;
   level2: string;
   level3: string;
@@ -129,6 +140,7 @@ export function buildApprovalRule(input: {
     approvalName: input.approvalName.trim(),
     templateId: input.templateId.trim(),
     paymentType: input.paymentType.trim(),
+    otherDimension: (input.otherDimension ?? "").trim(),
     level1: input.level1.trim(),
     level2: input.level2.trim(),
     level3: input.level3.trim(),

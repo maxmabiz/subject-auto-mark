@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 import { SourceBadge, StatusBadge } from "@/components/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { ManualMarkDialog } from "@/components/transaction/ManualMarkDialog";
@@ -106,16 +105,7 @@ export function TransactionsPage() {
       helper.accessor((row) => row.transaction.transactionId, {
         id: "transactionId",
         header: "交易号",
-        cell: (info) => (
-          <Tooltip content={info.getValue()}>
-            <button
-              className="block max-w-[18rem] truncate text-left text-brand-700 hover:underline"
-              onClick={() => setDetailId(info.row.original.transaction.id)}
-            >
-              {dash(info.getValue())}
-            </button>
-          </Tooltip>
-        ),
+        cell: (info) => <TextCell value={info.getValue()} width="max-w-[18rem]" />,
       }),
       helper.accessor((row) => row.transaction.counterpartyAccount, {
         id: "counterpartyAccount",
@@ -176,7 +166,23 @@ export function TransactionsPage() {
       helper.accessor((row) => row.final.subject?.level1, {
         id: "l1",
         header: "一级科目",
-        cell: (info) => <SubjectCell value={info.getValue()} />,
+        cell: (info) => {
+          const value = info.getValue();
+          return (
+            <button
+              type="button"
+              title={value || "查看匹配详情"}
+              className="block max-w-40 truncate text-left text-brand-700 hover:underline"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setDetailId(info.row.original.transaction.id);
+              }}
+            >
+              {value?.trim() || "—"}
+            </button>
+          );
+        },
       }),
       helper.accessor((row) => row.final.subject?.level2, {
         id: "l2",
@@ -282,9 +288,8 @@ export function TransactionsPage() {
   if (error) return <ErrorState message={error} />;
 
   return (
-    <TooltipProvider>
-      <div className="space-y-3">
-        <div className="text-xs text-muted">Fund / 公司业务 / 收付流水</div>
+    <div className="space-y-3">
+        <div className="text-sm text-muted">Fund / 公司业务 / 收付流水</div>
         <div className="border-b border-slate-200">
           <div className="inline-flex border-b-2 border-brand-700 px-1 pb-2 text-sm font-medium text-brand-800">收付流水</div>
         </div>
@@ -345,7 +350,7 @@ export function TransactionsPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-[2800px] w-full text-left text-sm">
-                <thead className="bg-[#fafafa] text-xs text-slate-600">
+                <thead className="bg-[#fafafa] text-sm text-slate-600">
                   {table.getHeaderGroups().map((group) => (
                     <tr key={group.id}>
                       {group.headers.map((header) => (
@@ -402,13 +407,12 @@ export function TransactionsPage() {
         />
         <ManualMarkDialog record={manual} open={Boolean(manual)} onOpenChange={(open) => { if (!open) setManualId(null); }} />
       </div>
-    </TooltipProvider>
   );
 }
 
 function SubjectCell({ value }: { value: string | null | undefined }) {
   if (!value) return <span className="text-slate-400">-</span>;
-  return <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">{value}</span>;
+  return <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-700">{value}</span>;
 }
 
 function TextCell({ value, width = "max-w-40" }: { value: string | null | undefined; width?: string }) {

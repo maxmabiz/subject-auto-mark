@@ -1,8 +1,8 @@
 import type { ApprovalRule, FeishuApprovalResult, SubjectPath, Transaction } from "../types";
 import { formatSubject, isBlank, normalizeText, subjectKey } from "../matching/normalize";
 
-export function approvalMatchKey(templateId: string, paymentType: string): string {
-  return `${normalizeText(templateId)}|${normalizeText(paymentType)}`;
+export function approvalMatchKey(templateId: string, paymentType: string, otherDimension = ""): string {
+  return `${normalizeText(templateId)}|${normalizeText(paymentType)}|${normalizeText(otherDimension)}`;
 }
 
 export function resolveFeishuMatch(
@@ -19,9 +19,10 @@ export function resolveFeishuMatch(
     return { hit: false, subject: null, rule: null, explanation: "无飞书审批结果" };
   }
 
-  const label = `「${feishu.approvalName} / ${feishu.paymentType}」`;
-  const key = approvalMatchKey(feishu.templateId, feishu.paymentType);
-  const candidates = rules.filter((rule) => approvalMatchKey(rule.templateId, rule.paymentType) === key);
+  const dimLabel = feishu.otherDimension?.trim() ? ` / ${feishu.otherDimension.trim()}` : "";
+  const label = `「${feishu.approvalName} / ${feishu.paymentType}${dimLabel}」`;
+  const key = approvalMatchKey(feishu.templateId, feishu.paymentType, feishu.otherDimension ?? "");
+  const candidates = rules.filter((rule) => approvalMatchKey(rule.templateId, rule.paymentType, rule.otherDimension ?? "") === key);
   const usable = candidates.filter((rule) => rule.subject && !isBlank(rule.subject.level1) && rule.validationStatus !== "error");
 
   if (usable.length === 0) {
@@ -39,7 +40,7 @@ export function resolveFeishuMatch(
       hit: false,
       subject: null,
       rule: null,
-      explanation: `已关联飞书审批${label}，但模板ID与付款申请类型对应多条不同科目，未自动采用，继续使用渠道规则。`,
+      explanation: `已关联飞书审批${label}，但模板ID、付款申请类型与其它维度对应多条不同科目，未自动采用，继续使用渠道规则。`,
     };
   }
 
@@ -56,7 +57,7 @@ export function formatFeishuLink(feishu: FeishuApprovalResult | null, matchExpla
   if (!feishu) return "无飞书审批结果";
   const subject = matchExplanation ?? "";
   return [
-    `${feishu.approvalName} / ${feishu.paymentType}`,
+    [feishu.approvalName, feishu.paymentType, feishu.otherDimension?.trim()].filter(Boolean).join(" / "),
     `模板ID ${feishu.templateId}`,
     `审批单号 ${feishu.approvalId}`,
     subject,

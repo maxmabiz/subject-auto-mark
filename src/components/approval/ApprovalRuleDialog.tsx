@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OTHER_DIMENSION_PRESETS } from "@/domain/approval/dimension";
 import { mockTemplateId } from "@/domain/approval/templateId";
 import { buildApprovalRule } from "@/domain/excel/parseApproval";
 import { buildSubjectDictionary, subjectTree } from "@/domain/subjects";
@@ -27,6 +28,7 @@ export function ApprovalRuleDialog({
   const [approvalName, setApprovalName] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [paymentType, setPaymentType] = useState("");
+  const [otherDimension, setOtherDimension] = useState("");
   const [level1, setLevel1] = useState("");
   const [level2, setLevel2] = useState("");
   const [level3, setLevel3] = useState("");
@@ -36,6 +38,7 @@ export function ApprovalRuleDialog({
     setApprovalName(rule?.approvalName ?? "");
     setTemplateId(rule?.templateId ?? "");
     setPaymentType(rule?.paymentType ?? "");
+    setOtherDimension(rule?.otherDimension ?? "");
     setLevel1(rule?.subject?.level1 ?? "");
     setLevel2(rule?.subject?.level2 ?? "");
     setLevel3(rule?.subject?.level3 ?? "");
@@ -62,6 +65,7 @@ export function ApprovalRuleDialog({
       approvalName,
       templateId: rule?.templateId ?? templateId,
       paymentType: rule?.paymentType ?? paymentType,
+      otherDimension: rule?.otherDimension ?? otherDimension,
       level1,
       level2,
       level3,
@@ -99,7 +103,7 @@ export function ApprovalRuleDialog({
                 placeholder="请输入"
               />
             </div>
-            <div className="space-y-1.5 col-span-2">
+            <div className="space-y-1.5">
               <Label>付款申请类型 <span className="text-red-500">*</span></Label>
               <Input
                 required
@@ -109,6 +113,20 @@ export function ApprovalRuleDialog({
                 className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                 placeholder="请输入"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>其它维度</Label>
+              <Input
+                disabled={isEdit}
+                value={otherDimension}
+                onChange={(event) => setOtherDimension(event.target.value)}
+                className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                placeholder="可空，如 独立站=是"
+                list="approval-other-dimension"
+              />
+              <datalist id="approval-other-dimension">
+                {OTHER_DIMENSION_PRESETS.map((item) => <option key={item} value={item} />)}
+              </datalist>
             </div>
             <div className="space-y-1.5">
               <Label>一级科目 <span className="text-red-500">*</span></Label>
@@ -126,7 +144,7 @@ export function ApprovalRuleDialog({
               <datalist id="approval-l3">{level3Options.map((item) => <option key={item} value={item} />)}</datalist>
             </div>
           </div>
-          <p className="text-xs text-muted">匹配键为模板ID + 付款申请类型。</p>
+          <p className="text-xs text-muted">匹配键为模板ID + 付款申请类型 + 其它维度（可空）。普通规则其它维度留空；独立站采购填「独立站=是」或「独立站=否」。</p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>取消</Button>
             <Button disabled={!canSubmit} onClick={submit}>保存</Button>

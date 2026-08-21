@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 
 const PIE_COLORS = {
   manual: "#7c3aed",
+  business: "#d97706",
   feishu: "#0f9d8a",
   channel: "#2563eb",
   none: "#94a3b8",
@@ -22,11 +23,11 @@ export function OverviewPage() {
   const stats = useMemo(() => {
     const total = records.length;
     const marked = records.filter((item) => item.final.subject).length;
-    const auto = records.filter((item) => item.final.source === "channel" || item.final.source === "feishu").length;
+    const auto = records.filter((item) => item.final.source === "channel" || item.final.source === "feishu" || item.final.source === "business").length;
     const unmatched = records.filter((item) => toDisplayStatus(item.final.status) === "unmatched").length;
     const unmatchable = records.filter((item) => toDisplayStatus(item.final.status) === "unmatchable").length;
     const manual = records.filter((item) => item.final.source === "manual").length;
-    const autoMarked = records.filter((item) => item.final.source === "channel" || item.final.source === "feishu" || item.final.source === "manual").length;
+    const autoMarked = records.filter((item) => item.final.source === "channel" || item.final.source === "feishu" || item.final.source === "business" || item.final.source === "manual").length;
     return {
       total,
       marked,
@@ -36,6 +37,7 @@ export function OverviewPage() {
       manualRate: autoMarked ? manual / autoMarked : 0,
       source: [
         { name: SOURCE_LABEL.manual, key: "manual", value: records.filter((item) => item.final.source === "manual").length },
+        { name: SOURCE_LABEL.business, key: "business", value: records.filter((item) => item.final.source === "business").length },
         { name: SOURCE_LABEL.feishu, key: "feishu", value: records.filter((item) => item.final.source === "feishu").length },
         { name: SOURCE_LABEL.channel, key: "channel", value: records.filter((item) => item.final.source === "channel").length },
         { name: SOURCE_LABEL.none, key: "none", value: records.filter((item) => item.final.source === "none").length },

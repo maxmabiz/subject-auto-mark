@@ -34,4 +34,10 @@ describe("approval rule log", () => {
   it("字段无变化时不产生 changes", () => {
     expect(diffApprovalRule(rule, { ...rule })).toEqual([]);
   });
+
+  it("其它维度变化单独记录", () => {
+    expect(diffApprovalRule(rule, { ...rule, otherDimension: "独立站=是" })).toEqual([
+      { field: "其它维度", from: "—", to: "独立站=是" },
+    ]);
+  });
 });

@@ -1,5 +1,6 @@
 import type {
   ApprovalRule,
+  BusinessRule,
   ChannelRuleResult,
   FeishuApprovalResult,
   FinalMatchResult,
@@ -8,6 +9,7 @@ import type {
   MatchStatus,
   Transaction,
 } from "../types";
+import { resolveBusinessMatch } from "../business/match";
 import { resolveFeishuMatch } from "../approval/match";
 import { formatSubject } from "./normalize";
 
@@ -16,11 +18,12 @@ export function decideFinalResult(input: {
   manual: ManualMark | null;
   feishu: FeishuApprovalResult | null;
   approvalRules: ApprovalRule[];
+  businessRules?: BusinessRule[];
   channel: ChannelRuleResult;
   ruleVersion: string | null;
   updatedAt: string;
 }): FinalMatchResult {
-  const { transaction, manual, feishu, approvalRules, channel, ruleVersion, updatedAt } = input;
+  const { transaction, manual, feishu, approvalRules, businessRules = [], channel, ruleVersion, updatedAt } = input;
 
   if (manual) {
     return {
@@ -35,7 +38,25 @@ export function decideFinalResult(input: {
       matchedRawValue: null,
       updatedAt: manual.markedAt,
       locked: true,
-      explanation: `已人工标记，飞书审批及渠道规则不得覆盖。最终科目：${formatSubject(manual.subject)}。`,
+      explanation: `已人工标记，业务规则、审批单规则及平台规则不得覆盖。最终科目：${formatSubject(manual.subject)}。`,
+    };
+  }
+
+  const businessMatch = resolveBusinessMatch(transaction, businessRules);
+  if (businessMatch.hit && businessMatch.subject) {
+    return {
+      transactionId: transaction.id,
+      status: "business_matched",
+      source: "business",
+      subject: businessMatch.subject,
+      matchedRuleId: businessMatch.rule?.id ?? null,
+      ruleVersion,
+      matchedField: "认领业务",
+      matchedKeyword: (transaction.claimBusiness ?? "").trim(),
+      matchedRawValue: (transaction.claimBusiness ?? "").trim(),
+      updatedAt,
+      locked: false,
+      explanation: businessMatch.explanation,
     };
   }
 
@@ -53,11 +74,12 @@ export function decideFinalResult(input: {
       matchedRawValue: feishu?.templateId ?? null,
       updatedAt: feishu?.matchedAt ?? updatedAt,
       locked: false,
-      explanation: feishuMatch.explanation,
+      explanation: prefixMiss(businessMatch.explanation, feishuMatch.explanation),
     };
   }
 
   const feishuMiss = feishu && feishu.transactionNo === transaction.transactionNo ? feishuMatch.explanation : "";
+  const priorMiss = [businessMiss(businessMatch.explanation), feishuMiss].filter(Boolean).join("");
 
   if (channel.status === "matched" && channel.subject) {
     return {
@@ -72,7 +94,7 @@ export function decideFinalResult(input: {
       matchedRawValue: channel.matchedRawValue,
       updatedAt,
       locked: false,
-      explanation: feishuMiss ? `${feishuMiss}${channel.explanation}` : channel.explanation,
+      explanation: priorMiss ? `${priorMiss}${channel.explanation}` : channel.explanation,
     };
   }
 
@@ -92,10 +114,20 @@ export function decideFinalResult(input: {
     matchedRawValue: channel.matchedRawValue,
     updatedAt,
     locked: false,
-    explanation: feishuMiss ? `${feishuMiss}${channel.explanation}` : channel.explanation,
+    explanation: priorMiss ? `${priorMiss}${channel.explanation}` : channel.explanation,
   };
 }
 
 export function rematchTransaction(input: Parameters<typeof decideFinalResult>[0]): FinalMatchResult {
   return decideFinalResult(input);
+}
+
+function businessMiss(explanation: string): string {
+  if (!explanation || explanation === "无认领业务") return "";
+  return explanation;
+}
+
+function prefixMiss(businessExplanation: string, next: string): string {
+  const miss = businessMiss(businessExplanation);
+  return miss ? `${miss}${next}` : next;
 }

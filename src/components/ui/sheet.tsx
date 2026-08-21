@@ -15,12 +15,13 @@ export function SheetContent({
 }: ComponentProps<typeof DialogPrimitive.Content> & { title?: string }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-900/40" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-[80] bg-slate-900/40" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed right-0 top-0 z-50 flex h-full w-[720px] max-w-[100vw] flex-col bg-white shadow-xl",
+          "fixed right-0 top-0 z-[80] flex h-full w-[720px] max-w-[100vw] flex-col bg-white shadow-xl",
           className,
         )}
+        onCloseAutoFocus={(event) => event.preventDefault()}
         {...props}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

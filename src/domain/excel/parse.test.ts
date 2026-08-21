@@ -38,10 +38,28 @@ describe("approval excel parse", () => {
     expect(new Set(ads.map((rule) => rule.templateId)).size).toBe(1);
     const recharge = ads.find((rule) => rule.paymentType === "充值");
     expect(recharge?.templateId).toHaveLength(32);
+    expect(recharge?.otherDimension).toBe("");
     expect(recharge?.subject?.level3).toBe("广告业务-付款-付代理商");
     const advance = parsed.rules.find((rule) => rule.paymentType === "预支");
     expect(advance?.approvalName).toBe("日常付款、报销申请");
     expect(advance?.validationStatus).toBe("warning");
     expect(advance?.subject).toBeNull();
+  });
+
+  it("解析是否独立站为其它维度，并区分是/否", () => {
+    const filePath = path.resolve(process.cwd(), "public/templates/飞书审批单与对应科目清单_是否独立站.xlsx");
+    const buffer = readFileSync(filePath);
+    const parsed = parseApprovalWorkbook(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.rules).toHaveLength(19);
+    expect(new Set(parsed.rules.map((rule) => rule.templateId)).size).toBe(1);
+    const yes = parsed.rules.find((rule) => rule.paymentType === "商品采购（有合同）" && rule.otherDimension === "独立站=是");
+    const no = parsed.rules.find((rule) => rule.paymentType === "商品采购（有合同）" && rule.otherDimension === "独立站=否");
+    expect(yes?.subject?.level1).toBe("电商业务");
+    expect(yes?.subject?.level3).toBe("电商业务-采购付款");
+    expect(no?.subject?.level1).toBe("履约业务");
+    expect(no?.subject?.level3).toBe("履约业务-采购付款");
+    expect(parsed.rules.some((rule) => rule.paymentType === "拍摄费用" && rule.otherDimension === "独立站=是")).toBe(true);
+    expect(parsed.rules.some((rule) => rule.paymentType === "拍摄费用" && rule.otherDimension === "独立站=否")).toBe(false);
   });
 });

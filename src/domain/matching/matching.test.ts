@@ -4,6 +4,7 @@ import { decideFinalResult } from "./decide";
 import { matchChannelRules } from "./channel";
 import { normalizeText } from "./normalize";
 import { APPROVAL_TEMPLATE_IDS, FALLBACK_APPROVAL_RULES } from "@/data/approvalRules.seed";
+import { FALLBACK_BUSINESS_RULES } from "@/data/businessRules.seed";
 
 function tx(partial: Partial<Transaction> & Pick<Transaction, "id">): Transaction {
   return {
@@ -22,6 +23,7 @@ function tx(partial: Partial<Transaction> & Pick<Transaction, "id">): Transactio
     paymentGateway: "",
     transactionType: "",
     feishuApprovalId: "",
+    claimBusiness: "",
     entityName: "HQY",
     transactionId: partial.transactionNo ?? `NO-${partial.id}`,
     billNo: "",
@@ -56,8 +58,8 @@ function rule(partial: Partial<Rule> & Pick<Rule, "id" | "keyword" | "searchFiel
   };
 }
 
-function decide(input: Omit<Parameters<typeof decideFinalResult>[0], "approvalRules"> & { approvalRules?: typeof FALLBACK_APPROVAL_RULES }) {
-  return decideFinalResult({ approvalRules: FALLBACK_APPROVAL_RULES, ...input });
+function decide(input: Omit<Parameters<typeof decideFinalResult>[0], "approvalRules" | "businessRules"> & { approvalRules?: typeof FALLBACK_APPROVAL_RULES; businessRules?: typeof FALLBACK_BUSINESS_RULES }) {
+  return decideFinalResult({ approvalRules: FALLBACK_APPROVAL_RULES, businessRules: FALLBACK_BUSINESS_RULES, ...input });
 }
 
 function feishuLink(partial: Partial<FeishuApprovalResult> & Pick<FeishuApprovalResult, "transactionNo">): FeishuApprovalResult {
@@ -248,7 +250,7 @@ describe("matching engine", () => {
     expect(result.candidates.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("人工结果优先于飞书和渠道规则", () => {
+  it("人工结果优先于业务、飞书和平台规则", () => {
     const channel = matchChannelRules(tx({ id: "9", transactionDescription: "shopify" }), [
       rule({ id: "R003", searchField: "交易描述", keyword: "shopify", subject: ecommerceSubject }),
     ]);
@@ -261,7 +263,7 @@ describe("matching engine", () => {
       markedAt: "2026-08-03T10:00:00.000Z",
     };
     const final = decide({
-      transaction: tx({ id: "9" }),
+      transaction: tx({ id: "9", claimBusiness: "履约" }),
       manual,
       feishu,
       channel,
@@ -291,6 +293,43 @@ describe("matching engine", () => {
     expect(final.matchedField).toBe("模板ID");
     expect(final.matchedRawValue).toBe(APPROVAL_TEMPLATE_IDS["广告付款申请"]);
     expect(channel.status).toBe("matched");
+  });
+
+  it("业务规则优先于飞书和平台规则", () => {
+    const transaction = tx({ id: "10c", transactionDescription: "shopify", claimBusiness: "履约" });
+    const channel = matchChannelRules(transaction, [
+      rule({ id: "R003", searchField: "交易描述", keyword: "shopify", subject: ecommerceSubject }),
+    ]);
+    const final = decide({
+      transaction,
+      manual: null,
+      feishu: feishuLink({ approvalId: "FS-2", transactionNo: transaction.transactionNo }),
+      channel,
+      ruleVersion: "V1.0.0",
+      updatedAt: "2026-08-02T10:00:00.000Z",
+    });
+    expect(final.source).toBe("business");
+    expect(final.subject).toEqual({ level1: "履约业务", level2: "收款", level3: null });
+    expect(final.matchedField).toBe("认领业务");
+    expect(final.matchedKeyword).toBe("履约");
+    expect(channel.status).toBe("matched");
+  });
+
+  it("无认领业务时不走业务规则", () => {
+    const transaction = tx({ id: "10d", transactionDescription: "shopify" });
+    const channel = matchChannelRules(transaction, [
+      rule({ id: "R003", searchField: "交易描述", keyword: "shopify", subject: ecommerceSubject }),
+    ]);
+    const final = decide({
+      transaction,
+      manual: null,
+      feishu: null,
+      channel,
+      ruleVersion: "V1.0.0",
+      updatedAt: "2026-08-02T10:00:00.000Z",
+    });
+    expect(final.source).toBe("channel");
+    expect(final.subject).toEqual(ecommerceSubject);
   });
 
   it("飞书按流水号关联，流水号不一致则不采用", () => {
@@ -395,6 +434,61 @@ describe("matching engine", () => {
     expect(final.source).toBe("channel");
     expect(final.subject).toEqual(ecommerceSubject);
     expect(final.explanation).toContain("未配置有效科目");
+  });
+
+  it("其它维度独立站=是/否命中不同科目，缺维度时不匹配", () => {
+    const templateId = APPROVAL_TEMPLATE_IDS["【线下】采购合同及付款申请 （一次付款/首款/中期款/尾款）"];
+    const transaction = tx({ id: "15", transactionNo: "NO-15" });
+    const channel = matchChannelRules(transaction, []);
+    const yes = decide({
+      transaction,
+      manual: null,
+      feishu: feishuLink({
+        approvalId: "FS-IS-Y",
+        approvalName: "【线下】采购合同及付款申请 （一次付款/首款/中期款/尾款）",
+        templateId,
+        paymentType: "商品采购（有合同）",
+        otherDimension: "独立站=是",
+        transactionNo: transaction.transactionNo,
+      }),
+      channel,
+      ruleVersion: "V1.0.0",
+      updatedAt: "2026-08-04T10:00:00.000Z",
+    });
+    const no = decide({
+      transaction,
+      manual: null,
+      feishu: feishuLink({
+        approvalId: "FS-IS-N",
+        approvalName: "【线下】采购合同及付款申请 （一次付款/首款/中期款/尾款）",
+        templateId,
+        paymentType: "商品采购（有合同）",
+        otherDimension: "独立站=否",
+        transactionNo: transaction.transactionNo,
+      }),
+      channel,
+      ruleVersion: "V1.0.0",
+      updatedAt: "2026-08-04T10:00:00.000Z",
+    });
+    const missing = decide({
+      transaction,
+      manual: null,
+      feishu: feishuLink({
+        approvalId: "FS-IS-X",
+        approvalName: "【线下】采购合同及付款申请 （一次付款/首款/中期款/尾款）",
+        templateId,
+        paymentType: "商品采购（有合同）",
+        transactionNo: transaction.transactionNo,
+      }),
+      channel,
+      ruleVersion: "V1.0.0",
+      updatedAt: "2026-08-04T10:00:00.000Z",
+    });
+    expect(yes.source).toBe("feishu");
+    expect(yes.subject).toEqual({ level1: "电商业务", level2: "", level3: "电商业务-采购付款" });
+    expect(no.source).toBe("feishu");
+    expect(no.subject).toEqual({ level1: "履约业务", level2: "", level3: "履约业务-采购付款" });
+    expect(missing.source).not.toBe("feishu");
   });
 
   it("23位数字关键词完整保留并可以匹配", () => {

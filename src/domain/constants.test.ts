@@ -4,6 +4,7 @@ import { matchesDisplayStatus, toDisplayStatus } from "./constants";
 describe("display match status", () => {
   it("maps engine statuses to 已匹配 / 未匹配 / 无法匹配", () => {
     expect(toDisplayStatus("auto_matched")).toBe("matched");
+    expect(toDisplayStatus("business_matched")).toBe("matched");
     expect(toDisplayStatus("feishu_matched")).toBe("matched");
     expect(toDisplayStatus("manual_marked")).toBe("matched");
     expect(toDisplayStatus("unmatched")).toBe("unmatched");

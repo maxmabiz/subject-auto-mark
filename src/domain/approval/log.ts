@@ -17,6 +17,7 @@ export function approvalRuleFieldValues(rule: ApprovalRule): { field: string; va
   return [
     { field: "审批单名称", value: dash(rule.approvalName) },
     { field: "付款申请类型", value: dash(rule.paymentType) },
+    { field: "其它维度", value: dash(rule.otherDimension) },
     { field: "科目", value: dash(formatSubject(rule.subject)) },
   ];
 }

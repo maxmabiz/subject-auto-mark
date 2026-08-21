@@ -1,12 +1,13 @@
 export type MatchStatus =
   | "auto_matched"
+  | "business_matched"
   | "feishu_matched"
   | "manual_marked"
   | "unmatched"
   | "rule_conflict"
   | "data_error";
 
-export type MatchSource = "manual" | "feishu" | "channel" | "none";
+export type MatchSource = "manual" | "business" | "feishu" | "channel" | "none";
 
 export type Direction = "in" | "out";
 
@@ -46,6 +47,7 @@ export interface Transaction {
   paymentGateway: string;
   transactionType: string;
   feishuApprovalId: string;
+  claimBusiness: string;
   entityName: string;
   transactionId: string;
   billNo: string;
@@ -102,6 +104,7 @@ export interface FeishuApprovalResult {
   approvalName: string;
   templateId: string;
   paymentType: string;
+  otherDimension?: string;
   transactionNo: string;
   matchedAt: string;
 }
@@ -113,6 +116,7 @@ export interface ApprovalRule {
   approvalName: string;
   templateId: string;
   paymentType: string;
+  otherDimension: string;
   subject: SubjectPath | null;
   validationStatus: RuleValidationStatus;
   errors: string[];
@@ -140,6 +144,41 @@ export interface ApprovalRuleLog {
 }
 
 export type ChannelRuleLog = ApprovalRuleLog;
+
+export type SubjectLevel = 1 | 2 | 3;
+
+export interface LedgerSubject {
+  id: string;
+  code: string;
+  name: string;
+  level: SubjectLevel;
+  parentId: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SubjectLogAction = "create" | "update" | "delete";
+
+export interface SubjectLog {
+  id: string;
+  subjectId: string;
+  time: string;
+  actor: string;
+  action: SubjectLogAction;
+  summary: string;
+  changes: ApprovalRuleChange[];
+}
+
+export interface BusinessRule {
+  id: string;
+  claimBusiness: string;
+  subject: SubjectPath;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BusinessRuleLog = ApprovalRuleLog;
 
 export interface ManualMark {
   subject: SubjectPath;

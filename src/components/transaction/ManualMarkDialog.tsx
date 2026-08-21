@@ -111,7 +111,7 @@ export function ManualMarkDialog({
             <div className="space-y-1.5">
               <Label>修改原因（必填）</Label>
               <Textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="请填写人工调整原因，便于后续追溯" />
-              <p className="text-xs text-muted">保存后该科目为最高优先级，飞书审批和平台规则不会覆盖。</p>
+              <p className="text-xs text-muted">保存后该科目为最高优先级，业务规则、审批单规则和平台规则不会覆盖。</p>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="secondary" onClick={() => onOpenChange(false)}>取消</Button>

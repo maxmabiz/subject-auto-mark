@@ -12,6 +12,7 @@ const STATUS_CLASS: Record<ReturnType<typeof toDisplayStatus>, string> = {
 const SOURCE_CLASS: Record<Exclude<MatchSource, "none">, string> = {
   channel: "bg-blue-50 text-blue-700 border border-blue-200",
   feishu: "bg-teal-50 text-teal-700 border border-teal-200",
+  business: "bg-amber-50 text-amber-800 border border-amber-200",
   manual: "bg-violet-50 text-violet-700 border border-violet-200",
 };
 
@@ -25,10 +26,10 @@ export function StatusBadge({ status }: { status: MatchStatus; locked?: boolean 
 }
 
 export function SourceBadge({ source }: { source: MatchSource; locked?: boolean }) {
-  if (source === "none") return <span className="text-slate-400">—</span>;
+  if (source === "none" || !SOURCE_CLASS[source]) return <span className="text-slate-400">—</span>;
   return (
     <Badge className={cn(SOURCE_CLASS[source])}>
-      {SOURCE_LABEL[source]}
+      {SOURCE_LABEL[source] ?? source}
     </Badge>
   );
 }

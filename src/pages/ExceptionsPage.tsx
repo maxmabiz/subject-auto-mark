@@ -92,7 +92,7 @@ function ExceptionTable({
   return (
     <Card className="overflow-hidden">
       <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-xs text-slate-600">
+        <thead className="bg-slate-50 text-sm text-slate-600">
           <tr>
             <th className="px-3 py-3">交易号</th>
             <th>时间</th>

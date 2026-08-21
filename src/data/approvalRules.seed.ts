@@ -1,3 +1,4 @@
+import { independentStationDimension } from "@/domain/approval/dimension";
 import { mockTemplateId } from "@/domain/approval/templateId";
 import { buildApprovalRuleLog } from "@/domain/approval/log";
 import type { ApprovalRule, ApprovalRuleLog } from "@/domain/types";
@@ -13,6 +14,7 @@ export const APPROVAL_TEMPLATE_IDS = {
   "日常付款、报销申请（有发票）": mockTemplateId("日常付款、报销申请（有发票）"),
   "知识产权事务申请": mockTemplateId("知识产权事务申请"),
   "内部资金调拨流程": mockTemplateId("内部资金调拨流程"),
+  "【线下】采购合同及付款申请 （一次付款/首款/中期款/尾款）": mockTemplateId("【线下】采购合同及付款申请 （一次付款/首款/中期款/尾款）"),
 } as const;
 
 function tid(name: keyof typeof APPROVAL_TEMPLATE_IDS): string {
@@ -20,7 +22,8 @@ function tid(name: keyof typeof APPROVAL_TEMPLATE_IDS): string {
 }
 
 function rule(
-  partial: Omit<ApprovalRule, "validationStatus" | "errors" | "subject" | "createdAt" | "updatedAt"> & {
+  partial: Omit<ApprovalRule, "validationStatus" | "errors" | "subject" | "createdAt" | "updatedAt" | "otherDimension"> & {
+    otherDimension?: string;
     level1: string;
     level2: string;
     level3: string;
@@ -42,6 +45,7 @@ function rule(
     approvalName: partial.approvalName,
     templateId: partial.templateId,
     paymentType: partial.paymentType,
+    otherDimension: partial.otherDimension ?? "",
     subject,
     validationStatus,
     errors,
@@ -49,6 +53,47 @@ function rule(
     updatedAt: "2026-08-01T02:00:00.000Z",
     matchedCountT1: partial.matchedCountT1,
   };
+}
+
+const OFFLINE_PURCHASE_NAME = "【线下】采购合同及付款申请 （一次付款/首款/中期款/尾款）" as const;
+
+function offlinePurchaseRules(): ApprovalRule[] {
+  const rows: Array<[string, "是" | "否", string, string, number]> = [
+    ["商品采购（有合同）", "是", "电商业务", "电商业务-采购付款", 3],
+    ["商品采购（无合同）【金额一万以下】", "是", "电商业务", "电商业务-采购付款", 2],
+    ["样品费", "是", "电商业务", "电商业务-采购付款", 1],
+    ["商品运费", "是", "电商业务", "电商业务-其他费用", 2],
+    ["证书费用", "是", "电商业务", "电商业务-采购付款", 1],
+    ["拍摄费用", "是", "电商业务", "电商业务-其他费用", 1],
+    ["其他费用", "是", "电商业务", "电商业务-其他费用", 2],
+    ["客户相关费用", "是", "电商业务", "电商业务-其他费用", 1],
+    ["备用金付款（采购专用）", "是", "电商业务", "电商业务-采购付款", 1],
+    ["备用金冲销（采购专用）", "是", "电商业务", "电商业务-采购付款", 1],
+    ["商品采购（有合同）", "否", "履约业务", "履约业务-采购付款", 2],
+    ["商品采购（无合同）【金额一万以下】", "否", "履约业务", "履约业务-采购付款", 1],
+    ["样品费", "否", "履约业务", "履约业务-采购付款", 1],
+    ["商品运费", "否", "履约业务", "履约业务-采购付款", 1],
+    ["证书费用", "否", "履约业务", "履约业务-采购付款", 1],
+    ["其他费用", "否", "履约业务", "履约业务-其他费用", 1],
+    ["客户相关费用", "否", "履约业务", "履约业务-其他费用", 1],
+    ["备用金付款（采购专用）", "否", "履约业务", "履约业务-采购付款", 1],
+    ["备用金冲销（采购专用）", "否", "履约业务", "履约业务-采购付款", 1],
+  ];
+  return rows.map(([paymentType, station, level1, level3, matchedCountT1], index) =>
+    rule({
+      id: `AR${String(71 + index).padStart(3, "0")}`,
+      excelRow: 71 + index,
+      seq: "3",
+      approvalName: OFFLINE_PURCHASE_NAME,
+      templateId: tid(OFFLINE_PURCHASE_NAME),
+      paymentType,
+      otherDimension: independentStationDimension(station),
+      level1,
+      level2: "",
+      level3,
+      matchedCountT1,
+    }),
+  );
 }
 
 export const FALLBACK_APPROVAL_RULES: ApprovalRule[] = [
@@ -66,6 +111,7 @@ export const FALLBACK_APPROVAL_RULES: ApprovalRule[] = [
   rule({ id: "AR038", excelRow: 38, seq: "6", approvalName: "垫资业务付款申请", templateId: tid("垫资业务付款申请"), paymentType: "佣金", level1: "", level2: "", level3: "", matchedCountT1: 0 }),
   rule({ id: "AR042", excelRow: 42, seq: "7", approvalName: "电商业务付款申请", templateId: tid("电商业务付款申请"), paymentType: "电商", level1: "电商业务", level2: "", level3: "电商业务-其他费用", matchedCountT1: 8 }),
   rule({ id: "AR061", excelRow: 61, seq: "13", approvalName: "内部资金调拨流程", templateId: tid("内部资金调拨流程"), paymentType: "资金调拨", level1: "资金转账", level2: "", level3: "", matchedCountT1: 1 }),
+  ...offlinePurchaseRules(),
 ];
 
 function byId(id: string): ApprovalRule {

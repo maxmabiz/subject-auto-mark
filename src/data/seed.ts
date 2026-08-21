@@ -1,4 +1,4 @@
-import type { AuditLog, FeishuApprovalResult, ManualMark, Transaction } from "@/domain/types";
+import type { AuditLog, FeishuApprovalResult, ManualMark, MatchSource, SubjectPath, Transaction } from "@/domain/types";
 import { APPROVAL_TEMPLATE_IDS } from "@/data/approvalRules.seed";
 import { mockAccount, mockEntityName } from "@/domain/channel/accounts";
 import { displayPlatform } from "@/domain/constants";
@@ -42,6 +42,7 @@ function base(partial: Partial<Transaction> & Pick<Transaction, "id" | "transact
     paymentGateway: "",
     transactionType: "",
     feishuApprovalId: "",
+    claimBusiness: "",
     entityName: "",
     transactionId: "",
     billNo: "",
@@ -131,6 +132,24 @@ const itSubject = { level1: "公司费用", level2: "", level3: "公司费用-�
 const welfareSubject = { level1: "公司费用", level2: "", level3: "公司费用-职工福利" };
 const logisticsSubject = { level1: "履约业务", level2: "", level3: "履约业务-付物流商" };
 const salaryManual = { level1: "公司费用", level2: "公司费用-职工薪酬", level3: "公司费用-职工薪酬-工资奖金" };
+const ecommerceSubject = { level1: "电商业务", level2: "电商业务-收款", level3: null };
+const fulfillReceive = { level1: "履约业务", level2: "收款", level3: null };
+const adsReceive = { level1: "广告业务", level2: "收款", level3: null };
+const adsPay = { level1: "广告业务", level2: "", level3: "广告业务-付款-付代理商" };
+
+function matchLog(
+  transactionId: string,
+  time: string,
+  actor: string,
+  action: string,
+  fromSubject: SubjectPath | null,
+  toSubject: SubjectPath | null,
+  fromSource: MatchSource | null,
+  toSource: MatchSource | null,
+  reason: string,
+): Omit<AuditLog, "id"> {
+  return { transactionId, time, actor, action, fromSubject, toSubject, fromSource, toSource, reason };
+}
 
 function feishuOf(
   approvalId: string,
@@ -180,10 +199,14 @@ export function createSeedRecords(): {
         transactionTime: at(11, 11, 8),
         amount: 18660,
         transactionDescription: "shopify payout weekly settlement",
+        claimBusiness: "履约",
       }),
       manual: null,
       feishu: null,
-      logs: [],
+      logs: [
+        matchLog("tx-002", at(11, 11, 10), "系统", "平台规则自动命中", null, ecommerceSubject, null, "channel", "交易描述命中 shopify"),
+        matchLog("tx-002", at(11, 11, 25), "系统", "业务规则命中并覆盖", ecommerceSubject, fulfillReceive, "channel", "business", "认领业务「履约」优先于平台规则"),
+      ],
     },
     {
       transaction: base({
@@ -543,7 +566,10 @@ export function createSeedRecords(): {
     }),
     manual: null,
     feishu: feishuOf("FS-PAY-073", "日常付款、报销申请", "公司福利（无发票）", at(14, 16, 0)),
-    logs: [],
+    logs: [
+      matchLog("tx-073", at(14, 15, 12), "系统", "平台规则自动命中", null, salaryManual, null, "channel", "备注命中 D26"),
+      matchLog("tx-073", at(14, 16, 0), "系统", "后续关联飞书审批并覆盖", salaryManual, welfareSubject, "channel", "feishu", "按流水号 PO-20260814-073 关联日常付款、报销申请 / 公司福利（无发票）"),
+    ],
   });
 
   extras.push({
@@ -572,10 +598,14 @@ export function createSeedRecords(): {
       direction: "out",
       transactionDescription: "ads media buy",
       feishuApprovalId: "FS-ADS-075",
+      claimBusiness: "广告",
     }),
     manual: null,
     feishu: feishuOf("FS-ADS-075", "广告付款申请", "充值", at(15, 14, 40)),
-    logs: [],
+    logs: [
+      matchLog("tx-075", at(15, 14, 20), "系统", "后续关联飞书审批", null, adsPay, null, "feishu", "按流水号 WF-20260815-075 关联广告付款申请 / 充值"),
+      matchLog("tx-075", at(15, 14, 35), "系统", "业务规则命中并覆盖", adsPay, adsReceive, "feishu", "business", "认领业务「广告」优先于审批单规则"),
+    ],
   });
 
   extras.push({

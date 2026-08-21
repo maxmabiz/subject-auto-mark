@@ -17,7 +17,7 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/AppStore";
 
-const emptyFilters = { name: "all", templateId: "", paymentType: "", subject: "", createdFrom: "", createdTo: "" };
+const emptyFilters = { name: "all", templateId: "", paymentType: "", otherDimension: "", subject: "", createdFrom: "", createdTo: "" };
 
 export function ApprovalRulesPage() {
   const { loading, error, approvalRules, deleteApprovalRule, importApprovalRules } = useAppStore();
@@ -33,12 +33,14 @@ export function ApprovalRulesPage() {
   const names = useMemo(() => [...new Set(approvalRules.map((item) => item.approvalName).filter(Boolean))], [approvalRules]);
   const filtered = useMemo(() => {
     const paymentType = applied.paymentType.trim();
+    const otherDimension = applied.otherDimension.trim();
     const subject = applied.subject.trim();
     const templateId = applied.templateId.trim().toLowerCase();
     return approvalRules.filter((rule) => {
       if (applied.name !== "all" && rule.approvalName !== applied.name) return false;
       if (templateId && !rule.templateId.toLowerCase().includes(templateId)) return false;
       if (paymentType && !rule.paymentType.includes(paymentType)) return false;
+      if (otherDimension && !(rule.otherDimension ?? "").includes(otherDimension)) return false;
       if (subject && !formatSubject(rule.subject).includes(subject)) return false;
       const createdDay = formatDate(rule.createdAt);
       if (applied.createdFrom && createdDay !== "—" && createdDay < applied.createdFrom) return false;
@@ -85,7 +87,7 @@ export function ApprovalRulesPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-xs text-muted">Fund / 科目匹配规则 / 审批单规则</div>
+          <div className="text-sm text-muted">Fund / 科目匹配规则 / 审批单规则</div>
           <h1 className="mt-1 text-xl font-semibold tracking-tight">审批单规则</h1>
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-4">
@@ -141,6 +143,14 @@ export function ApprovalRulesPage() {
               onKeyDown={(e) => { if (e.key === "Enter") search(); }}
             />
           </FilterField>
+          <FilterField label="其它维度">
+            <Input
+              value={draft.otherDimension}
+              placeholder="请输入"
+              onChange={(e) => setDraft({ ...draft, otherDimension: e.target.value })}
+              onKeyDown={(e) => { if (e.key === "Enter") search(); }}
+            />
+          </FilterField>
           <FilterField label="科目">
             <Input
               value={draft.subject}
@@ -156,7 +166,7 @@ export function ApprovalRulesPage() {
               <Input type="date" value={draft.createdTo} onChange={(e) => setDraft({ ...draft, createdTo: e.target.value })} />
             </div>
           </FilterField>
-          <div className="col-span-2 flex items-end justify-end gap-2">
+          <div className="col-span-1 flex items-end justify-end gap-2">
             <Button onClick={search}>查询</Button>
             <Button variant="secondary" onClick={reset}>重置</Button>
           </div>
@@ -168,24 +178,26 @@ export function ApprovalRulesPage() {
           <div className="p-10"><EmptyState title="没有符合条件的审批单规则" description="请调整筛选条件后重新查询，或新增规则、导入 Excel。" /></div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
+            <table className="w-full min-w-[1400px] table-fixed text-left text-sm">
               <colgroup>
-                <col className="w-[13%]" />
                 <col className="w-[12%]" />
                 <col className="w-[11%]" />
                 <col className="w-[10%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
+                <col className="w-[9%]" />
+                <col className="w-[9%]" />
+                <col className="w-[9%]" />
+                <col className="w-[9%]" />
+                <col className="w-[7%]" />
                 <col className="w-[8%]" />
-                <col className="w-[8%]" />
-                <col className="w-[8%]" />
-                <col className="w-[10%]" />
+                <col className="w-[7%]" />
+                <col className="w-[9%]" />
               </colgroup>
               <thead>
-                <tr className="bg-[#f7f8fb] text-xs text-slate-500">
+                <tr className="bg-[#f7f8fb] text-sm text-slate-500">
                   <th className="px-3 py-3 font-medium">审批单名称</th>
                   <th className="px-3 py-3 font-medium">模板ID</th>
                   <th className="px-3 py-3 font-medium">付款申请类型</th>
+                  <th className="px-3 py-3 font-medium">其它维度</th>
                   <th className="px-3 py-3 font-medium">一级科目</th>
                   <th className="px-3 py-3 font-medium">二级科目</th>
                   <th className="px-3 py-3 font-medium">三级科目</th>
@@ -205,6 +217,7 @@ export function ApprovalRulesPage() {
                       </span>
                     </td>
                     <td className="px-3 py-3 align-middle text-slate-700">{rule.paymentType}</td>
+                    <td className="px-3 py-3 align-middle text-slate-700">{dashPart(rule.otherDimension)}</td>
                     <td className="px-3 py-3 align-middle">
                       <span className="block truncate text-slate-700" title={rule.subject?.level1 || undefined}>{dashPart(rule.subject?.level1)}</span>
                     </td>
@@ -300,7 +313,7 @@ function FilterField({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-xs font-medium text-slate-500">{label}</Label>
+      <Label className="text-sm font-medium text-slate-500">{label}</Label>
       {children}
     </div>
   );
