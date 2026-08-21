@@ -2,7 +2,7 @@ import type { MatchStatus, ParsedExcelRow } from "./types";
 
 export const CURRENT_USER = "财务管理员";
 export const PRODUCT_NAME = "流水科目自动标记";
-export const APP_VERSION = "1.2.1";
+export const APP_VERSION = "1.2.2";
 export const STORAGE_KEY = "subject-auto-mark-v19";
 export const TEMPLATE_PATH = `${import.meta.env.BASE_URL}templates/${encodeURIComponent("科目匹配规则-原始配置.xlsx")}`;
 export const APPROVAL_TEMPLATE_PATH = `${import.meta.env.BASE_URL}templates/${encodeURIComponent("飞书审批单与对应科目清单.xlsx")}`;

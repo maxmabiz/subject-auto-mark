@@ -103,16 +103,7 @@ export function BusinessRulesPage() {
           <div className="p-10"><EmptyState title="没有符合条件的业务规则" description="请调整筛选条件后重新查询，或新增规则。" /></div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] table-fixed text-left text-sm">
-              <colgroup>
-                <col className="w-[14%]" />
-                <col className="w-[16%]" />
-                <col className="w-[16%]" />
-                <col className="w-[16%]" />
-                <col className="w-[12%]" />
-                <col className="w-[12%]" />
-                <col className="w-[14%]" />
-              </colgroup>
+            <table className="w-full min-w-[960px] text-left text-sm">
               <thead>
                 <tr className="bg-[#f7f8fb] text-sm text-slate-500">
                   <th className="px-3 py-3 font-medium">认领业务</th>

@@ -178,20 +178,7 @@ export function ApprovalRulesPage() {
           <div className="p-10"><EmptyState title="没有符合条件的审批单规则" description="请调整筛选条件后重新查询，或新增规则、导入 Excel。" /></div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1400px] table-fixed text-left text-sm">
-              <colgroup>
-                <col className="w-[12%]" />
-                <col className="w-[11%]" />
-                <col className="w-[10%]" />
-                <col className="w-[9%]" />
-                <col className="w-[9%]" />
-                <col className="w-[9%]" />
-                <col className="w-[9%]" />
-                <col className="w-[7%]" />
-                <col className="w-[8%]" />
-                <col className="w-[7%]" />
-                <col className="w-[9%]" />
-              </colgroup>
+            <table className="w-full min-w-[1400px] text-left text-sm">
               <thead>
                 <tr className="bg-[#f7f8fb] text-sm text-slate-500">
                   <th className="px-3 py-3 font-medium">审批单名称</th>
@@ -211,22 +198,12 @@ export function ApprovalRulesPage() {
                 {paged.map((rule) => (
                   <tr key={rule.id} className="border-t border-slate-100 hover:bg-slate-50/80">
                     <td className="px-3 py-3 align-middle font-medium text-ink">{rule.approvalName}</td>
-                    <td className="px-3 py-3 align-middle">
-                      <span className="block truncate font-mono text-xs text-slate-500" title={rule.templateId}>
-                        {compactId(rule.templateId)}
-                      </span>
-                    </td>
+                    <td className="px-3 py-3 align-middle font-mono text-xs text-slate-500">{rule.templateId}</td>
                     <td className="px-3 py-3 align-middle text-slate-700">{rule.paymentType}</td>
                     <td className="px-3 py-3 align-middle text-slate-700">{dashPart(rule.otherDimension)}</td>
-                    <td className="px-3 py-3 align-middle">
-                      <span className="block truncate text-slate-700" title={rule.subject?.level1 || undefined}>{dashPart(rule.subject?.level1)}</span>
-                    </td>
-                    <td className="px-3 py-3 align-middle">
-                      <span className="block truncate text-slate-700" title={rule.subject?.level2 || undefined}>{dashPart(rule.subject?.level2)}</span>
-                    </td>
-                    <td className="px-3 py-3 align-middle">
-                      <span className="block truncate text-slate-700" title={rule.subject?.level3 || undefined}>{dashPart(rule.subject?.level3)}</span>
-                    </td>
+                    <td className="px-3 py-3 align-middle text-slate-700">{dashPart(rule.subject?.level1)}</td>
+                    <td className="px-3 py-3 align-middle text-slate-700">{dashPart(rule.subject?.level2)}</td>
+                    <td className="px-3 py-3 align-middle text-slate-700">{dashPart(rule.subject?.level3)}</td>
                     <td className="px-1 py-3 text-center align-middle tabular-nums">
                       <span className={rule.matchedCountT1 ? "text-ink" : "text-slate-400"}>{rule.matchedCountT1 ?? 0}</span>
                     </td>
@@ -322,11 +299,6 @@ function FilterField({
 function dashPart(value: string | null | undefined): string {
   const text = value?.trim();
   return text || "—";
-}
-
-function compactId(id: string): string {
-  if (id.length <= 18) return id;
-  return `${id.slice(0, 8)}…${id.slice(-6)}`;
 }
 
 function PageBtn({

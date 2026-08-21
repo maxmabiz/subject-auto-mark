@@ -91,6 +91,7 @@ function ExceptionTable({
   if (!records.length) return <EmptyState title={empty} description="可返回收付流水查看已标记结果。" />;
   return (
     <Card className="overflow-hidden">
+      <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead className="bg-slate-50 text-sm text-slate-600">
           <tr>
@@ -110,7 +111,7 @@ function ExceptionTable({
               <td>{formatDateTime(record.transaction.transactionTime)}</td>
               <td>{displayPlatform(record.transaction.platform)} / {dash(record.transaction.account)}</td>
               <td>{formatMoney(record.transaction.amount, record.transaction.currency)}</td>
-              <td className="max-w-80">{extra(record)}</td>
+              <td>{extra(record)}</td>
               <td><StatusBadge status={record.final.status} /></td>
               <td>
                 <div className="flex gap-1">
@@ -122,6 +123,7 @@ function ExceptionTable({
           ))}
         </tbody>
       </table>
+      </div>
     </Card>
   );
 }

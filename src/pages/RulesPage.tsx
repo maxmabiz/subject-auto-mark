@@ -214,21 +214,17 @@ export function RulesPage() {
                 {paged.map((rule) => (
                   <tr key={rule.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80">
                     <td className="whitespace-nowrap px-3 py-2 align-middle font-medium text-ink">{displayPlatform(rule.platform)}</td>
+                    <td className="px-3 py-2 align-middle text-slate-700">{rule.account}</td>
+                    <td className="px-3 py-2 align-middle text-slate-700">{rule.searchField || "—"}</td>
+                    <td className="px-3 py-2 align-middle text-slate-700">{rule.keyword}</td>
                     <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[9.5rem] truncate text-slate-700" title={rule.account}>{rule.account}</div>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 align-middle text-slate-700">{rule.searchField || "—"}</td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[13rem] truncate text-slate-700" title={rule.keyword}>{rule.keyword}</div>
-                    </td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[8.5rem]"><SubjectCell value={rule.subject.level1} /></div>
+                      <SubjectCell value={rule.subject.level1} />
                     </td>
                     <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[10rem]"><SubjectCell value={rule.subject.level2} /></div>
+                      <SubjectCell value={rule.subject.level2} />
                     </td>
                     <td className="px-3 py-2 align-middle">
-                      <div className="max-w-[11rem]"><SubjectCell value={rule.subject.level3} /></div>
+                      <SubjectCell value={rule.subject.level3} />
                     </td>
                     <td className="px-3 py-2 text-center align-middle tabular-nums">
                       <span className={rule.matchedCountT1 ? "text-ink" : "text-slate-400"}>{rule.matchedCountT1 ?? 0}</span>
@@ -326,7 +322,7 @@ function SubjectCell({ value }: { value: string | null | undefined }) {
   const text = value?.trim();
   if (!text) return <span className="text-slate-400">—</span>;
   return (
-    <span className="inline-block max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 align-middle text-sm leading-5 text-slate-700" title={text}>
+    <span className="inline-block rounded bg-slate-100 px-1.5 py-0.5 align-middle text-sm leading-5 text-slate-700" title={text}>
       {text}
     </span>
   );

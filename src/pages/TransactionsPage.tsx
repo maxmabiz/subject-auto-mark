@@ -85,17 +85,17 @@ export function TransactionsPage() {
       helper.accessor((row) => row.transaction.entityName, {
         id: "entity",
         header: "主体名称",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-44" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.account, {
         id: "account",
         header: "账户号",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.accountName, {
         id: "accountName",
         header: "账户名",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.platform, {
         id: "platform",
@@ -105,17 +105,17 @@ export function TransactionsPage() {
       helper.accessor((row) => row.transaction.transactionId, {
         id: "transactionId",
         header: "交易号",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-[18rem]" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.counterpartyAccount, {
         id: "counterpartyAccount",
         header: "付款方账号",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.payeeName, {
         id: "counterpartyName",
         header: "付款方姓名",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-36" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.transactionTime, {
         id: "time",
@@ -151,17 +151,17 @@ export function TransactionsPage() {
       helper.accessor((row) => row.transaction.businessType, {
         id: "businessType",
         header: "业务类型",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-36" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.transactionDescription, {
         id: "info",
         header: "交易信息",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-64" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.transaction.note, {
         id: "note",
         header: "备注",
-        cell: (info) => <TextCell value={info.getValue()} width="max-w-40" />,
+        cell: (info) => <TextCell value={info.getValue()} />,
       }),
       helper.accessor((row) => row.final.subject?.level1, {
         id: "l1",
@@ -172,7 +172,7 @@ export function TransactionsPage() {
             <button
               type="button"
               title={value || "查看匹配详情"}
-              className="block max-w-40 truncate text-left text-brand-700 hover:underline"
+              className="text-left text-brand-700 hover:underline"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -415,13 +415,9 @@ function SubjectCell({ value }: { value: string | null | undefined }) {
   return <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-700">{value}</span>;
 }
 
-function TextCell({ value, width = "max-w-40" }: { value: string | null | undefined; width?: string }) {
+function TextCell({ value }: { value: string | null | undefined }) {
   const text = dash(value);
-  return (
-    <span className={cn("block truncate", width)} title={text === "—" ? undefined : text}>
-      {text}
-    </span>
-  );
+  return <span title={text === "—" ? undefined : text}>{text}</span>;
 }
 
 function FilterSelect({
