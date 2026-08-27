@@ -4,8 +4,8 @@ import { BookOpen, Briefcase, ChevronDown, ClipboardList, FileSpreadsheet, Layer
 import { APP_VERSION, PRODUCT_NAME } from "@/domain/constants";
 import { cn } from "@/lib/utils";
 
-const groupClass = "flex w-full items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-left text-[12px] font-medium leading-5 text-white/90 hover:bg-white/10";
-const itemClass = "ml-4 flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-left text-[12px] font-medium leading-5 text-white/80 hover:bg-white/10";
+const groupClass = "flex w-full items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-left text-[17.16px] font-medium leading-6 text-white/90 hover:bg-white/10";
+const itemClass = "ml-4 flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-left text-[17.16px] font-medium leading-6 text-white/80 hover:bg-white/10";
 const itemActiveClass = "bg-white/15 text-white";
 
 export function AppLayout() {
@@ -19,8 +19,8 @@ export function AppLayout() {
     <div className="flex min-h-screen bg-[#f5f7fb]">
       <aside className="sticky top-0 flex h-screen w-[260px] shrink-0 flex-col bg-[#16356b] text-white">
         <div className="border-b border-white/10 px-5 py-4">
-          <div className="whitespace-nowrap text-[13px] font-semibold leading-5 tracking-wide">{PRODUCT_NAME}</div>
-          <div className="mt-1 whitespace-nowrap text-[10px] leading-4 text-white/70">资金后台 · 科目标记</div>
+          <div className="whitespace-nowrap text-[18.59px] font-semibold leading-6 tracking-wide">{PRODUCT_NAME}</div>
+          <div className="mt-1 whitespace-nowrap text-[14.3px] leading-5 text-white/70">资金后台 · 科目标记</div>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
           <button
@@ -84,8 +84,8 @@ export function AppLayout() {
             </>
           ) : null}
         </nav>
-        <div className="border-t border-white/10 px-5 py-3 text-[10px] leading-4 text-white/50">
-          v{APP_VERSION}
+        <div className="border-t border-white/10 px-5 py-3 text-[14.3px] leading-5 text-white/50">
+          v{APP_VERSION}{import.meta.env.DEV ? " · 本地5175" : ""}
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

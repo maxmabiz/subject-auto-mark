@@ -1,5 +1,90 @@
 import { buildChannelRuleLog } from "@/domain/channel/log";
+import { buildChannelRule } from "@/domain/channel/rule";
 import type { ChannelRuleLog, Rule, SubjectPath } from "@/domain/types";
+
+const OR_CREATED = "2026-08-20T03:00:00.000Z";
+
+/** 演示用：一条规则多组检索条件（或）。放在列表最前，刷新本地存储后可见。 */
+export const FALLBACK_MULTI_CONDITION_RULES: Rule[] = [
+  buildChannelRule({
+    id: "R901",
+    excelRow: 901,
+    platform: "Payoneer",
+    account: "所有账户",
+    conditions: [
+      { searchField: "交易描述", keyword: "ADS_PAYOUT" },
+      { searchField: "备注", keyword: "广告结算" },
+    ],
+    level1: "广告业务",
+    level2: "广告业务-收款",
+    level3: "",
+    createdAt: OR_CREATED,
+    matchedCountT1: 5,
+  }),
+  buildChannelRule({
+    id: "R902",
+    excelRow: 902,
+    platform: "Airwallex",
+    account: "所有账户",
+    conditions: [
+      { searchField: "交易描述", keyword: "STRIPE PAYOUT" },
+      { searchField: "电商平台/支付网关", keyword: "Stripe" },
+    ],
+    level1: "电商业务",
+    level2: "电商业务-收款",
+    level3: "",
+    createdAt: OR_CREATED,
+    matchedCountT1: 8,
+  }),
+  buildChannelRule({
+    id: "R903",
+    excelRow: 903,
+    platform: "PingPong",
+    account: "PingPong-A01",
+    conditions: [
+      { searchField: "业务类型", keyword: "出账" },
+      { searchField: "交易描述", keyword: "WITHDRAW" },
+    ],
+    level1: "资金转账",
+    level2: "资金转账-付款",
+    level3: "",
+    createdAt: OR_CREATED,
+    matchedCountT1: 3,
+  }),
+  buildChannelRule({
+    id: "R904",
+    excelRow: 904,
+    platform: "HSBC",
+    account: "所有账户",
+    conditions: [
+      { searchField: "交易描述", keyword: "PAYROLL" },
+      { searchField: "备注", keyword: "工资发放" },
+      { searchField: "code 类型", keyword: "薪酬付款" },
+    ],
+    level1: "公司费用",
+    level2: "公司费用-职工薪酬",
+    level3: "公司费用-职工薪酬-工资奖金",
+    createdAt: OR_CREATED,
+    matchedCountT1: 4,
+  }),
+  buildChannelRule({
+    id: "R905",
+    excelRow: 905,
+    platform: "Worldfirst",
+    account: "Worldfirst-A01",
+    conditions: [
+      { searchField: "交易描述", keyword: "Amazon payout" },
+      { searchField: "交易描述", keyword: "AMZ SETTLEMENT" },
+      { searchField: "备注", keyword: "Amazon" },
+      { searchField: "电商平台/支付网关", keyword: "Amazon" },
+    ],
+    level1: "电商业务",
+    level2: "电商业务-收款",
+    level3: "",
+    createdAt: OR_CREATED,
+    matchedCountT1: 12,
+  }),
+];
 
 const ACTORS = ["财务管理员", "张敏", "李晓雯", "王磊"] as const;
 

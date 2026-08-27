@@ -13,7 +13,8 @@ import { TEMPLATE_PATH, displayPlatform } from "@/domain/constants";
 import { parseRuleWorkbook } from "@/domain/excel/parse";
 import { validateParsedRules } from "@/domain/excel/validate";
 import { formatSubject } from "@/domain/matching";
-import { ruleConditions } from "@/domain/channel/match";
+import { formatRuleConditions, ruleConditions } from "@/domain/channel/match";
+import { hydrateChannelRule } from "@/domain/channel/rule";
 import type { Rule } from "@/domain/types";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -202,8 +203,7 @@ export function RulesPage() {
                 <tr className="border-b border-slate-200 bg-[#fafafa] text-sm text-slate-500">
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium">平台</th>
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium">账号</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">检索字段</th>
-                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">检索关键词</th>
+                  <th className="whitespace-nowrap px-3 py-2.5 font-medium">检索条件</th>
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium">一级科目</th>
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium">二级科目</th>
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium">三级科目</th>
@@ -218,8 +218,9 @@ export function RulesPage() {
                   <tr key={rule.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80">
                     <td className="whitespace-nowrap px-3 py-2 align-middle font-medium text-ink">{displayPlatform(rule.platform)}</td>
                     <td className="px-3 py-2 align-middle text-slate-700">{rule.account}</td>
-                    <td className="px-3 py-2 align-middle text-slate-700">{ruleConditions(rule).map((item) => item.searchField || "—").join(" 或 ")}</td>
-                    <td className="px-3 py-2 align-middle text-slate-700">{ruleConditions(rule).map((item) => item.keyword).join(" 或 ")}</td>
+                    <td className="max-w-[360px] !whitespace-normal px-3 py-2 align-middle">
+                      <ConditionCell rule={rule} />
+                    </td>
                     <td className="px-3 py-2 align-middle">
                       <SubjectCell value={rule.subject.level1} />
                     </td>
@@ -317,6 +318,28 @@ function FilterField({
     <div className={cn("space-y-1.5", className)}>
       <Label>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function ConditionCell({ rule }: { rule: Rule }) {
+  const items = ruleConditions(rule);
+  if (!items.length) return <span className="text-slate-400">—</span>;
+  const full = formatRuleConditions(rule);
+  const pair = (item: { searchField: string; keyword: string }) => `${item.searchField || "—"}=${item.keyword || "—"}`;
+
+  if (items.length === 1) {
+    return <span className="whitespace-nowrap text-slate-700" title={full}>{pair(items[0])}</span>;
+  }
+
+  return (
+    <div className="whitespace-normal leading-5 text-slate-700" title={full}>
+      {items.map((item, index) => (
+        <div key={`${item.searchField}-${item.keyword}-${index}`}>
+          {index > 0 ? <span className="text-slate-400">或 </span> : null}
+          {pair(item)}
+        </div>
+      ))}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { CURRENT_USER, FALLBACK_EXCEL_ROWS, SOURCE_LABEL, STORAGE_KEY, TEMPLATE_
 import { parseRuleWorkbook } from "@/domain/excel/parse";
 import { validateParsedRules } from "@/domain/excel/validate";
 import { FALLBACK_APPROVAL_RULES, FALLBACK_APPROVAL_RULE_LOGS } from "@/data/approvalRules.seed";
-import { seedChannelRuleLogs } from "@/data/channelRules.seed";
+import { FALLBACK_MULTI_CONDITION_RULES, seedChannelRuleLogs } from "@/data/channelRules.seed";
 import { FALLBACK_BUSINESS_RULES, FALLBACK_BUSINESS_RULE_LOGS } from "@/data/businessRules.seed";
 import { FALLBACK_SUBJECTS, FALLBACK_SUBJECT_LOGS } from "@/data/subjects.seed";
 import type {
@@ -103,9 +103,13 @@ async function loadExcelRows(): Promise<ParsedExcelRow[]> {
 
 function bootstrapState(rows: ParsedExcelRow[]): PersistShape {
   const validated = validateParsedRules(rows, "");
-  const channelRules = validated.rules
+  const excelRules = validated.rules
     .filter((rule) => rule.validationStatus !== "error")
     .map((rule) => hydrateChannelRule(rule));
+  const channelRules = [
+    ...FALLBACK_MULTI_CONDITION_RULES.map((rule) => hydrateChannelRule(rule)),
+    ...excelRules,
+  ];
   const channelRuleLogs = seedChannelRuleLogs(channelRules);
   const seed = createSeedRecords();
   const records = seed.map((item) =>

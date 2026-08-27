@@ -20,7 +20,8 @@ export default defineConfig({
       interval: 300,
     },
     headers: {
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
     },
   },
   build: {
