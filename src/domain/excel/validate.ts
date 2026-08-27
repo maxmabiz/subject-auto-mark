@@ -2,6 +2,7 @@ import type { ParsedExcelRow, Rule, RuleValidationResult, SubjectPath } from "..
 import { ALL_ACCOUNT_LABEL, getMatchMode, isSearchFieldSupported } from "../matching/fieldMap";
 import { isBlank, normalizeText, subjectKey } from "../matching/normalize";
 import { channelMatchKey } from "../channel/match";
+import { hydrateChannelRule } from "../channel/rule";
 import { mockAccount } from "../channel/accounts";
 
 function toSubject(row: ParsedExcelRow): SubjectPath {
@@ -90,13 +91,14 @@ export function validateParsedRules(rows: ParsedExcelRow[], version: string): Ru
     const errors = blockingByRow.get(row.excelRow) ?? [];
     const warnings = [...new Set(warningByRow.get(row.excelRow) ?? [])];
     const validationStatus = errors.length > 0 ? "error" : warnings.length > 0 ? "warning" : "valid";
-    return {
+    return hydrateChannelRule({
       id: `R${String(row.excelRow).padStart(3, "0")}`,
       excelRow: row.excelRow,
       platform: row.platform.trim(),
       account: mockAccount(row.account.trim()),
       searchField: row.searchField.trim(),
       keyword: row.keyword,
+      conditions: [{ searchField: row.searchField.trim(), keyword: row.keyword.trim() }],
       subject: toSubject(row),
       matchMode: isBlank(row.searchField) ? null : getMatchMode(row.searchField.trim()),
       explicitPriority: 0,
@@ -107,7 +109,7 @@ export function validateParsedRules(rows: ParsedExcelRow[], version: string): Ru
       createdAt: "",
       updatedAt: "",
       matchedCountT1: 0,
-    };
+    });
   });
 
   return {

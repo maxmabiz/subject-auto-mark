@@ -11,6 +11,18 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  server: {
+    host: "127.0.0.1",
+    port: 5175,
+    strictPort: true,
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  },
   build: {
     outDir: "docs",
     emptyOutDir: true,

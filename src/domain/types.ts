@@ -62,6 +62,11 @@ export interface Transaction {
   updatedAt: string;
 }
 
+export interface RuleCondition {
+  searchField: string;
+  keyword: string;
+}
+
 export interface Rule {
   id: string;
   excelRow: number;
@@ -69,6 +74,7 @@ export interface Rule {
   account: string;
   searchField: string;
   keyword: string;
+  conditions?: RuleCondition[];
   subject: SubjectPath;
   matchMode: MatchMode | null;
   explicitPriority: number;

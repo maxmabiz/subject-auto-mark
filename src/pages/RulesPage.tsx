@@ -13,7 +13,7 @@ import { TEMPLATE_PATH, displayPlatform } from "@/domain/constants";
 import { parseRuleWorkbook } from "@/domain/excel/parse";
 import { validateParsedRules } from "@/domain/excel/validate";
 import { formatSubject } from "@/domain/matching";
-import { hydrateChannelRule } from "@/domain/channel/rule";
+import { ruleConditions } from "@/domain/channel/match";
 import type { Rule } from "@/domain/types";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,10 @@ export function RulesPage() {
 
   const platforms = useMemo(() => [...new Set(rules.map((item) => item.platform).filter(Boolean))], [rules]);
   const accounts = useMemo(() => [...new Set(rules.map((item) => item.account).filter(Boolean))], [rules]);
-  const fields = useMemo(() => [...new Set(rules.map((item) => item.searchField).filter(Boolean))], [rules]);
+  const fields = useMemo(
+    () => [...new Set(rules.flatMap((item) => ruleConditions(item).map((cond) => cond.searchField)).filter(Boolean))],
+    [rules],
+  );
 
   const filtered = useMemo(() => {
     const keyword = applied.keyword.trim().toLowerCase();
@@ -42,8 +45,8 @@ export function RulesPage() {
     return rules.filter((rule) => {
       if (applied.platform !== "all" && rule.platform !== applied.platform) return false;
       if (applied.account !== "all" && rule.account !== applied.account) return false;
-      if (applied.field !== "all" && rule.searchField !== applied.field) return false;
-      if (keyword && !rule.keyword.toLowerCase().includes(keyword)) return false;
+      if (applied.field !== "all" && !ruleConditions(rule).some((item) => item.searchField === applied.field)) return false;
+      if (keyword && !ruleConditions(rule).some((item) => item.keyword.toLowerCase().includes(keyword))) return false;
       if (subject && !formatSubject(rule.subject).includes(subject)) return false;
       const createdDay = formatDate(rule.createdAt);
       if (applied.createdFrom && createdDay !== "—" && createdDay < applied.createdFrom) return false;
@@ -215,8 +218,8 @@ export function RulesPage() {
                   <tr key={rule.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80">
                     <td className="whitespace-nowrap px-3 py-2 align-middle font-medium text-ink">{displayPlatform(rule.platform)}</td>
                     <td className="px-3 py-2 align-middle text-slate-700">{rule.account}</td>
-                    <td className="px-3 py-2 align-middle text-slate-700">{rule.searchField || "—"}</td>
-                    <td className="px-3 py-2 align-middle text-slate-700">{rule.keyword}</td>
+                    <td className="px-3 py-2 align-middle text-slate-700">{ruleConditions(rule).map((item) => item.searchField || "—").join(" 或 ")}</td>
+                    <td className="px-3 py-2 align-middle text-slate-700">{ruleConditions(rule).map((item) => item.keyword).join(" 或 ")}</td>
                     <td className="px-3 py-2 align-middle">
                       <SubjectCell value={rule.subject.level1} />
                     </td>

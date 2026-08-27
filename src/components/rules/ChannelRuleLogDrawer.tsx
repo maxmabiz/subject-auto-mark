@@ -1,5 +1,6 @@
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { CHANNEL_LOG_ACTION_LABEL } from "@/domain/channel/log";
+import { formatRuleConditions } from "@/domain/channel/match";
 import { displayPlatform } from "@/domain/constants";
 import type { ApprovalRuleChange, ChannelRuleLog, Rule } from "@/domain/types";
 import { formatDateTime } from "@/lib/format";
@@ -23,7 +24,7 @@ export function ChannelRuleLogDrawer({
         {rule ? (
           <div className="flex-1 overflow-auto px-5 py-4">
             <div className="mb-4 text-sm leading-6 text-slate-500">
-              {displayPlatform(rule.platform)} · {rule.account} · {rule.searchField}
+              {displayPlatform(rule.platform)} · {rule.account} · {formatRuleConditions(rule)}
             </div>
             {logs.length ? (
               <ol className="space-y-4 border-l border-slate-200 pl-4">
@@ -72,7 +73,7 @@ function LogDetail({ log }: { log: ChannelRuleLog }) {
 function visibleChanges(log: ChannelRuleLog): ApprovalRuleChange[] {
   if (log.action === "create" || log.action === "import") {
     const created = log.changes.every((item) => item.from === "—");
-    if (created) return log.changes.filter((item) => item.field === "科目" || item.field === "检索关键词");
+    if (created) return log.changes.filter((item) => item.field === "科目" || item.field === "检索条件");
   }
   return log.changes;
 }

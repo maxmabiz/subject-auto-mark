@@ -27,7 +27,7 @@ import { createSeedRecords } from "@/data/seed";
 import { appendLog, enrichOne } from "./compute";
 import { approvalMatchKey } from "@/domain/approval/match";
 import { buildApprovalRuleLog } from "@/domain/approval/log";
-import { channelMatchKey } from "@/domain/channel/match";
+import { ruleConditionKeys, ruleConditions } from "@/domain/channel/match";
 import { buildChannelRuleLog } from "@/domain/channel/log";
 import { hydrateChannelRule } from "@/domain/channel/rule";
 import { buildSubjectLog } from "@/domain/subject/log";
@@ -346,7 +346,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         toast.success("已撤销人工标记并重新计算");
       },
       saveChannelRule: (rule) => {
-        if (!rule.platform.trim() || !rule.account.trim() || !rule.searchField.trim() || !rule.keyword.trim() || !rule.subject.level1.trim() || !rule.subject.level2.trim()) {
+        const conditions = ruleConditions(rule);
+        if (!rule.platform.trim() || !rule.account.trim() || !rule.subject.level1.trim() || !rule.subject.level2.trim() || conditions.some((item) => !item.searchField.trim() || !item.keyword.trim())) {
           const message = "平台、账号、检索字段、关键词、一级科目和二级科目必填";
           toast.error(message);
           return { ok: false, message };
@@ -356,10 +357,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           toast.error(message);
           return { ok: false, message };
         }
-        const key = channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword);
-        const dup = (state?.channelRules ?? []).find((item) => item.id !== rule.id && channelMatchKey(item.platform, item.account, item.searchField, item.keyword) === key);
+        const keys = new Set(ruleConditionKeys(rule));
+        const dup = (state?.channelRules ?? []).find((item) => item.id !== rule.id && ruleConditionKeys(item).some((key) => keys.has(key)));
         if (dup) {
-          const message = "平台、账号、检索字段与关键词已存在，无法保存";
+          const message = "同一平台、账号下该检索字段与关键词已存在，无法保存";
           toast.error(message);
           return { ok: false, message };
         }
@@ -418,22 +419,37 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const inUseIds = new Set(records.filter((item) => item.final.source === "channel" && item.final.matchedRuleId).map((item) => item.final.matchedRuleId!));
         persist((prev) => {
           const now = new Date().toISOString();
-          const byKey = new Map(prev.channelRules.map((item) => [channelMatchKey(item.platform, item.account, item.searchField, item.keyword), item]));
+          const byKey = new Map<string, Rule>();
+          for (const item of prev.channelRules) {
+            for (const key of ruleConditionKeys(item)) byKey.set(key, item);
+          }
+          const incomingKeys = new Set(incoming.flatMap((rule) => ruleConditionKeys(rule)));
           const merged = incoming.map((rule) => {
-            const existing = byKey.get(channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword));
+            const existing = ruleConditionKeys(rule).map((key) => byKey.get(key)).find(Boolean);
             return hydrateChannelRule({
               ...rule,
               id: existing?.id ?? rule.id,
+              searchField: existing?.searchField ?? rule.searchField,
+              keyword: existing?.keyword ?? rule.keyword,
+              conditions: existing?.conditions?.length ? existing.conditions : ruleConditions(rule),
               createdAt: existing?.createdAt ?? now,
               updatedAt: now,
               matchedCountT1: existing?.matchedCountT1 ?? rule.matchedCountT1 ?? 0,
             });
           });
-          const kept = prev.channelRules.filter((item) => inUseIds.has(item.id) && !incoming.some((next) => next.id === item.id || channelMatchKey(next.platform, next.account, next.searchField, next.keyword) === channelMatchKey(item.platform, item.account, item.searchField, item.keyword)));
+          const kept = prev.channelRules.filter((item) => inUseIds.has(item.id) && !ruleConditionKeys(item).some((key) => incomingKeys.has(key)));
           for (const item of kept) merged.push(item);
           const logs = merged.flatMap((rule) => {
-            const existing = byKey.get(channelMatchKey(rule.platform, rule.account, rule.searchField, rule.keyword));
-            if (existing && existing.keyword === rule.keyword && JSON.stringify(existing.subject) === JSON.stringify(rule.subject) && existing.platform === rule.platform && existing.account === rule.account && existing.searchField === rule.searchField) {
+            const existing = ruleConditionKeys(rule).map((key) => byKey.get(key)).find(Boolean);
+            if (
+              existing &&
+              existing.keyword === rule.keyword &&
+              JSON.stringify(existing.subject) === JSON.stringify(rule.subject) &&
+              existing.platform === rule.platform &&
+              existing.account === rule.account &&
+              existing.searchField === rule.searchField &&
+              JSON.stringify(ruleConditions(existing)) === JSON.stringify(ruleConditions(rule))
+            ) {
               return [];
             }
             return [

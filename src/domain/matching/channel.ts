@@ -7,6 +7,7 @@ import type {
 } from "../types";
 import { ALL_ACCOUNT_LABEL, getMatchMode, getTransactionFieldValue } from "./fieldMap";
 import { isBlank, normalizeText, sameSubject } from "./normalize";
+import { ruleConditions } from "../channel/match";
 
 function matchesKeyword(rawValue: string, keyword: string, mode: "contains" | "exact"): boolean {
   const value = normalizeText(rawValue);
@@ -16,29 +17,39 @@ function matchesKeyword(rawValue: string, keyword: string, mode: "contains" | "e
   return value.includes(needle);
 }
 
-function candidateRank(rule: Rule, transaction: Transaction): ChannelCandidate | null {
-  const mode = rule.matchMode ?? getMatchMode(rule.searchField);
+function rankCondition(rule: Rule, searchField: string, keyword: string, transaction: Transaction): ChannelCandidate | null {
+  const mode = getMatchMode(searchField);
   if (!mode) return null;
-  const rawValue = getTransactionFieldValue(transaction, rule.searchField);
+  const rawValue = getTransactionFieldValue(transaction, searchField);
   if (rawValue == null) return null;
-  if (!matchesKeyword(rawValue, rule.keyword, mode)) return null;
+  if (!matchesKeyword(rawValue, keyword, mode)) return null;
 
   return {
     ruleId: rule.id,
     excelRow: rule.excelRow,
     platform: rule.platform,
     account: rule.account,
-    searchField: rule.searchField,
-    keyword: rule.keyword,
+    searchField,
+    keyword,
     matchMode: mode,
     subject: rule.subject,
     rankScore: {
       accountSpecific: normalizeText(rule.account) === normalizeText(ALL_ACCOUNT_LABEL) ? 0 : 1,
       exactMatch: mode === "exact" ? 1 : 0,
-      keywordLength: normalizeText(rule.keyword).length,
+      keywordLength: normalizeText(keyword).length,
       explicitPriority: rule.explicitPriority,
     },
   };
+}
+
+function candidateRank(rule: Rule, transaction: Transaction): ChannelCandidate | null {
+  let best: ChannelCandidate | null = null;
+  for (const condition of ruleConditions(rule)) {
+    const candidate = rankCondition(rule, condition.searchField, condition.keyword, transaction);
+    if (!candidate) continue;
+    if (!best || compareCandidates(candidate, best) < 0) best = candidate;
+  }
+  return best;
 }
 
 function keywordsRelated(a: ChannelCandidate, b: ChannelCandidate): boolean {
@@ -132,7 +143,7 @@ export function matchChannelRules(
           normalizeText(rule.account) === normalizeText(ALL_ACCOUNT_LABEL) ||
           normalizeText(rule.account) === normalizeText(transaction.account),
       )
-      .map((rule) => rule.searchField),
+      .flatMap((rule) => ruleConditions(rule).map((item) => item.searchField)),
   );
 
   for (const field of requiredFields) {
@@ -154,7 +165,7 @@ export function matchChannelRules(
 
   const missingFieldErrors: string[] = [];
   const fieldHasValue = (field: string) => !isBlank(getTransactionFieldValue(transaction, field) ?? "");
-  const applicableFields = [...new Set(scopedRules.map((rule) => rule.searchField))];
+  const applicableFields = [...new Set(scopedRules.flatMap((rule) => ruleConditions(rule).map((item) => item.searchField)))];
   const emptyRequired = applicableFields.filter((field) => !fieldHasValue(field));
   if (scopedRules.length > 0 && applicableFields.every((field) => !fieldHasValue(field))) {
     missingFieldErrors.push(`缺少规则所需字段：${emptyRequired.join("、")}`);

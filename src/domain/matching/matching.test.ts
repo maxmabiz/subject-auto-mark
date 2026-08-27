@@ -126,6 +126,28 @@ describe("matching engine", () => {
     expect(result.matchedKeyword).toBe("shopify");
   });
 
+  it("同一规则多组检索条件为或，任一组命中即可", () => {
+    const grouped = rule({
+      id: "R-OR",
+      searchField: "交易描述",
+      keyword: "shopify",
+      conditions: [
+        { searchField: "交易描述", keyword: "shopify" },
+        { searchField: "备注", keyword: "D26XX" },
+      ],
+      subject: ecommerceSubject,
+    });
+    const byNote = matchChannelRules(tx({ id: "or-1", note: "payroll D26XX batch" }), [grouped]);
+    expect(byNote.status).toBe("matched");
+    expect(byNote.matchedField).toBe("备注");
+    expect(byNote.matchedKeyword).toBe("D26XX");
+    const byDesc = matchChannelRules(tx({ id: "or-2", transactionDescription: "weekly shopify payout" }), [grouped]);
+    expect(byDesc.status).toBe("matched");
+    expect(byDesc.matchedKeyword).toBe("shopify");
+    const miss = matchChannelRules(tx({ id: "or-3", transactionDescription: "office rent" }), [grouped]);
+    expect(miss.status).toBe("unmatched");
+  });
+
   it("code 类型使用完全匹配", () => {
     const freeze = rule({
       id: "R023",

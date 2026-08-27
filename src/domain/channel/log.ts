@@ -1,6 +1,7 @@
 import type { ChannelRuleLog, Rule } from "../types";
 import type { ApprovalRuleChange, ApprovalRuleLogAction } from "../types";
 import { formatSubject } from "../matching/normalize";
+import { formatRuleConditions } from "./match";
 
 export const CHANNEL_LOG_ACTION_LABEL: Record<ApprovalRuleLogAction, string> = {
   create: "新增规则",
@@ -18,8 +19,7 @@ export function channelRuleFieldValues(rule: Rule): { field: string; value: stri
   return [
     { field: "平台", value: dash(rule.platform) },
     { field: "账号", value: dash(rule.account) },
-    { field: "检索字段", value: dash(rule.searchField) },
-    { field: "检索关键词", value: dash(rule.keyword) },
+    { field: "检索条件", value: formatRuleConditions(rule) },
     { field: "科目", value: dash(formatSubject(rule.subject)) },
   ];
 }
