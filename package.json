@@ -1,7 +1,7 @@
 {
   "name": "subject-auto-mark",
   "private": true,
-  "version": "1.2.5",
+  "version": "1.2.6",
   "type": "module",
   "homepage": "https://maxmabiz.github.io/subject-auto-mark/",
   "scripts": {

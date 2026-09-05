@@ -474,14 +474,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       },
       saveApprovalRule: (rule) => {
         if (!rule.approvalName.trim() || !rule.templateId.trim() || !rule.paymentType.trim() || !rule.subject?.level1.trim()) {
-          const message = "审批单名称、模板ID、付款申请类型和一级科目必填";
+          const message = "审批单名称、审批单编码、付款申请类型和一级科目必填";
           toast.error(message);
           return { ok: false, message };
         }
         const key = approvalMatchKey(rule.templateId, rule.paymentType, rule.otherDimension ?? "");
         const dup = (state?.approvalRules ?? []).find((item) => item.id !== rule.id && approvalMatchKey(item.templateId, item.paymentType, item.otherDimension ?? "") === key);
         if (dup) {
-          const message = "模板ID、付款申请类型与其它维度已存在，无法保存";
+          const message = "审批单编码、付款申请类型与其它维度已存在，无法保存";
           toast.error(message);
           return { ok: false, message };
         }

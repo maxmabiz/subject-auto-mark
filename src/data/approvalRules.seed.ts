@@ -34,7 +34,7 @@ function rule(
     : null;
   const errors: string[] = [];
   if (!partial.approvalName) errors.push("飞书审批单名称为空");
-  if (!partial.templateId) errors.push("模板ID为空");
+  if (!partial.templateId) errors.push("审批单编码为空");
   if (!partial.paymentType) errors.push("付款申请类型为空");
   const validationStatus = errors.length ? "error" : partial.level1 ? "valid" : "warning";
   if (!partial.level1 && !errors.length) errors.push("未配置科目，匹配时回退渠道规则");

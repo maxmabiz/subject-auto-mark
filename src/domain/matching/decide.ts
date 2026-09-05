@@ -69,7 +69,7 @@ export function decideFinalResult(input: {
       subject: feishuMatch.subject,
       matchedRuleId: feishuMatch.rule?.id ?? null,
       ruleVersion,
-      matchedField: "模板ID",
+      matchedField: "审批单编码",
       matchedKeyword: feishu?.paymentType ?? null,
       matchedRawValue: feishu?.templateId ?? null,
       updatedAt: feishu?.matchedAt ?? updatedAt,

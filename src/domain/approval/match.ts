@@ -40,7 +40,7 @@ export function resolveFeishuMatch(
       hit: false,
       subject: null,
       rule: null,
-      explanation: `已关联飞书审批${label}，但模板ID、付款申请类型与其它维度对应多条不同科目，未自动采用，继续使用渠道规则。`,
+      explanation: `已关联飞书审批${label}，但审批单编码、付款申请类型与其它维度对应多条不同科目，未自动采用，继续使用渠道规则。`,
     };
   }
 
@@ -49,7 +49,7 @@ export function resolveFeishuMatch(
     hit: true,
     subject: matched.subject,
     rule: matched,
-    explanation: `按流水号 ${transaction.transactionNo} 关联飞书审批${label}，匹配模板ID ${feishu.templateId}。渠道规则候选已保留但未生效。`,
+    explanation: `按流水号 ${transaction.transactionNo} 关联飞书审批${label}，匹配审批单编码 ${feishu.templateId}。渠道规则候选已保留但未生效。`,
   };
 }
 
@@ -58,7 +58,7 @@ export function formatFeishuLink(feishu: FeishuApprovalResult | null, matchExpla
   const subject = matchExplanation ?? "";
   return [
     [feishu.approvalName, feishu.paymentType, feishu.otherDimension?.trim()].filter(Boolean).join(" / "),
-    `模板ID ${feishu.templateId}`,
+    `审批单编码 ${feishu.templateId}`,
     `审批单号 ${feishu.approvalId}`,
     subject,
   ].filter(Boolean).join("\n");

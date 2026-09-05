@@ -16,7 +16,7 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/AppStore";
 
-const emptyFilters = { level: "all", code: "", name: "", parentId: "all" };
+const emptyFilters = { level: "all", code: "", name: "" };
 
 export function SubjectsPage() {
   const { loading, error, subjects, deleteSubject } = useAppStore();
@@ -36,11 +36,6 @@ export function SubjectsPage() {
     setExpanded(new Set(parentIdsWithChildren(subjects)));
   }, [subjects]);
 
-  const parents = useMemo(
-    () => sortSubjectsByCode(subjects.filter((item) => item.level !== 3)),
-    [subjects],
-  );
-
   const keep = useMemo(() => {
     const code = applied.code.trim().toLowerCase();
     const name = applied.name.trim();
@@ -48,7 +43,6 @@ export function SubjectsPage() {
       if (applied.level !== "all" && String(item.level) !== applied.level) return false;
       if (code && !item.code.toLowerCase().includes(code)) return false;
       if (name && !item.name.includes(name)) return false;
-      if (applied.parentId !== "all" && item.parentId !== applied.parentId) return false;
       return true;
     });
   }, [applied, subjects]);
@@ -89,19 +83,14 @@ export function SubjectsPage() {
   };
 
   const exportCsv = () => {
-    const header = ["级别", "科目编码", "科目名称", "上级科目编码", "上级科目名称", "创建人", "创建时间"];
-    const lines = sortSubjectsByCode(subjects).map((item) => {
-      const parent = findSubject(subjects, item.parentId);
-      return [
-        LEVEL_LABEL[item.level],
-        item.code,
-        item.name,
-        parent?.code ?? "",
-        parent?.name ?? "",
-        item.createdBy,
-        formatDateTime(item.createdAt),
-      ].map(csvCell).join(",");
-    });
+    const header = ["级别", "科目编码", "科目名称", "创建人", "创建时间"];
+    const lines = sortSubjectsByCode(subjects).map((item) => [
+      LEVEL_LABEL[item.level],
+      item.code,
+      item.name,
+      item.createdBy,
+      formatDateTime(item.createdAt),
+    ].map(csvCell).join(","));
     const blob = new Blob(["\uFEFF" + [header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -166,18 +155,7 @@ export function SubjectsPage() {
               onKeyDown={(e) => { if (e.key === "Enter") search(); }}
             />
           </FilterField>
-          <FilterField label="上级科目">
-            <Select value={draft.parentId} onValueChange={(parentId) => setDraft({ ...draft, parentId })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {parents.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>{item.code} {item.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <div className="col-span-4 flex items-end justify-end gap-2">
+          <div className="flex items-end justify-end gap-2">
             <Button onClick={search}>查询</Button>
             <Button variant="secondary" onClick={reset}>重置</Button>
           </div>
@@ -189,13 +167,20 @@ export function SubjectsPage() {
           <div className="p-10"><EmptyState title="没有符合条件的科目" description="请调整筛选条件后重新查询，或新增一级科目。" /></div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1280px] text-left text-sm">
+            <table className="w-full min-w-[1080px] table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[16%]" />
+                <col className="w-[28%]" />
+                <col className="w-[8%]" />
+                <col className="w-[12%]" />
+                <col className="w-[14%]" />
+                <col className="w-[22%]" />
+              </colgroup>
               <thead>
                 <tr className="bg-[#f7f8fb] text-sm text-slate-500">
                   <th className="px-3 py-3 font-medium">科目编码</th>
                   <th className="px-3 py-3 font-medium">科目名称</th>
                   <th className="px-3 py-3 font-medium">级别</th>
-                  <th className="px-3 py-3 font-medium">上级科目</th>
                   <th className="px-3 py-3 font-medium">创建人</th>
                   <th className="px-3 py-3 font-medium">创建时间</th>
                   <th className="px-3 py-3 font-medium">操作</th>
@@ -208,9 +193,9 @@ export function SubjectsPage() {
                   const pad = item.level === 1 ? "pl-3" : item.level === 2 ? "pl-8" : "pl-14";
                   return (
                     <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                      <td className="px-3 py-3 align-middle font-mono text-xs text-slate-600">{item.code}</td>
-                      <td className={cn("py-3 align-middle", pad)}>
-                        <div className="flex items-center gap-1 whitespace-nowrap">
+                      <td className="overflow-hidden px-3 py-3 align-middle font-mono text-xs text-slate-600">{item.code}</td>
+                      <td className={cn("overflow-hidden py-3 align-middle", pad)}>
+                        <div className="flex min-w-0 items-center gap-1">
                           {item.level < 3 && childCount > 0 ? (
                             <button type="button" className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100" onClick={() => toggle(item.id)}>
                               {expanded.has(item.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -218,15 +203,10 @@ export function SubjectsPage() {
                           ) : (
                             <span className="inline-block w-4 shrink-0" />
                           )}
-                          <span className="font-medium text-ink" title={item.name}>{item.name}</span>
+                          <span className="truncate font-medium text-ink" title={item.name}>{item.name}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3 align-middle text-slate-600">{LEVEL_LABEL[item.level]}</td>
-                      <td className="px-3 py-3 align-middle text-slate-600">
-                        {parent ? (
-                          <span title={`${parent.code} ${parent.name}`}>{parent.code} {parent.name}</span>
-                        ) : "—"}
-                      </td>
+                      <td className="overflow-hidden px-3 py-3 align-middle text-slate-600">{LEVEL_LABEL[item.level]}</td>
                       <td className="px-3 py-3 align-middle text-slate-600">{item.createdBy}</td>
                       <td className="px-3 py-3 align-middle text-slate-500">{formatDate(item.createdAt)}</td>
                       <td className="whitespace-nowrap px-3 py-3 align-middle">

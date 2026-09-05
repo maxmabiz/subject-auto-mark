@@ -312,7 +312,7 @@ describe("matching engine", () => {
     });
     expect(final.source).toBe("feishu");
     expect(final.subject?.level3).toBe("广告业务-付款-付代理商");
-    expect(final.matchedField).toBe("模板ID");
+    expect(final.matchedField).toBe("审批单编码");
     expect(final.matchedRawValue).toBe(APPROVAL_TEMPLATE_IDS["广告付款申请"]);
     expect(channel.status).toBe("matched");
   });

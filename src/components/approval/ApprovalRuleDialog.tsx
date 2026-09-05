@@ -93,7 +93,7 @@ export function ApprovalRuleDialog({
               </datalist>
             </div>
             <div className="space-y-1.5">
-              <Label>模板ID <span className="text-red-500">*</span></Label>
+              <Label>审批单编码 <span className="text-red-500">*</span></Label>
               <Input
                 required
                 disabled={isEdit}
@@ -144,7 +144,7 @@ export function ApprovalRuleDialog({
               <datalist id="approval-l3">{level3Options.map((item) => <option key={item} value={item} />)}</datalist>
             </div>
           </div>
-          <p className="text-xs text-muted">匹配键为模板ID + 付款申请类型 + 其它维度（可空）。普通规则其它维度留空；独立站采购填「独立站=是」或「独立站=否」。</p>
+          <p className="text-xs text-muted">匹配键为审批单编码 + 付款申请类型 + 其它维度（可空）。普通规则其它维度留空；独立站采购填「独立站=是」或「独立站=否」。</p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>取消</Button>
             <Button disabled={!canSubmit} onClick={submit}>保存</Button>

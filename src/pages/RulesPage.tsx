@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { FileSpreadsheet, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { useMemo, useState, type ReactNode } from "react";
+import { Plus } from "lucide-react";
 import { AlertDialog, AlertDialogContent } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { ChannelRuleDialog } from "@/components/rules/ChannelRuleDialog";
 import { ChannelRuleLogDrawer } from "@/components/rules/ChannelRuleLogDrawer";
-import { TEMPLATE_PATH, displayPlatform } from "@/domain/constants";
-import { parseRuleWorkbook } from "@/domain/excel/parse";
-import { validateParsedRules } from "@/domain/excel/validate";
+import { displayPlatform } from "@/domain/constants";
 import { formatSubject } from "@/domain/matching";
 import { formatRuleConditions, ruleConditions } from "@/domain/channel/match";
-import { hydrateChannelRule } from "@/domain/channel/rule";
 import type { Rule } from "@/domain/types";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -23,8 +19,7 @@ import { useAppStore } from "@/store/AppStore";
 const emptyFilters = { platform: "all", account: "all", field: "all", keyword: "", subject: "", createdFrom: "", createdTo: "" };
 
 export function RulesPage() {
-  const { loading, error, rules, deleteChannelRule, importChannelRules } = useAppStore();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const { loading, error, rules, deleteChannelRule } = useAppStore();
   const [editing, setEditing] = useState<Rule | null | "new">(null);
   const [logRule, setLogRule] = useState<Rule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -72,28 +67,6 @@ export function RulesPage() {
     setPageIndex(0);
   };
 
-  const onImport = async (file: File) => {
-    const buffer = await file.arrayBuffer();
-    const parsed = parseRuleWorkbook(buffer, {
-      fileName: file.name,
-      fileSize: file.size,
-      uploadedAt: new Date().toISOString(),
-    });
-    if (parsed.errors.length) {
-      toast.error(parsed.errors.join("；"));
-      return;
-    }
-    const validated = validateParsedRules(parsed.rows, "");
-    const valid = validated.rules.filter((item) => item.validationStatus !== "error").map(hydrateChannelRule);
-    if (!valid.length) {
-      toast.error("没有可导入的完整规则");
-      return;
-    }
-    importChannelRules(valid);
-    if (validated.error) toast.message(`已跳过 ${validated.error} 条不完整规则`);
-    setPageIndex(0);
-  };
-
   const deletingRule = rules.find((item) => item.id === deleteId) ?? null;
   const usedCount = deletingRule?.matchedCountT1 ?? 0;
   const deletingInUse = usedCount > 0;
@@ -109,24 +82,6 @@ export function RulesPage() {
           <h1 className="mt-0.5 text-xl font-semibold tracking-tight">平台规则</h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <a href={TEMPLATE_PATH} download>
-            <Button variant="secondary">下载模板</Button>
-          </a>
-          <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-            <FileSpreadsheet className="h-4 w-4" />
-            导入 Excel
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void onImport(file);
-              event.target.value = "";
-            }}
-          />
           <Button onClick={() => setEditing("new")}>
             <Plus className="h-4 w-4" />
             新增规则
@@ -195,7 +150,7 @@ export function RulesPage() {
 
       <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
         {filtered.length === 0 ? (
-          <div className="p-8"><EmptyState title="没有符合条件的平台规则" description="请调整筛选条件后重新查询，或新增规则、导入 Excel。" /></div>
+          <div className="p-8"><EmptyState title="没有符合条件的平台规则" description="请调整筛选条件后重新查询，或新增规则。" /></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] text-left text-sm leading-5">

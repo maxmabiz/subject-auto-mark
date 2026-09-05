@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { FileSpreadsheet, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { useMemo, useState, type ReactNode } from "react";
+import { Plus } from "lucide-react";
 import { AlertDialog, AlertDialogContent } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { ApprovalRuleDialog } from "@/components/approval/ApprovalRuleDialog";
 import { ApprovalRuleLogDrawer } from "@/components/approval/ApprovalRuleLogDrawer";
-import { APPROVAL_TEMPLATE_PATH } from "@/domain/constants";
-import { parseApprovalWorkbook } from "@/domain/excel/parseApproval";
 import { formatSubject } from "@/domain/matching";
 import type { ApprovalRule } from "@/domain/types";
 import { formatDate } from "@/lib/format";
@@ -20,8 +17,7 @@ import { useAppStore } from "@/store/AppStore";
 const emptyFilters = { name: "all", templateId: "", paymentType: "", otherDimension: "", subject: "", createdFrom: "", createdTo: "" };
 
 export function ApprovalRulesPage() {
-  const { loading, error, approvalRules, deleteApprovalRule, importApprovalRules } = useAppStore();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const { loading, error, approvalRules, deleteApprovalRule } = useAppStore();
   const [editing, setEditing] = useState<ApprovalRule | null | "new">(null);
   const [logRule, setLogRule] = useState<ApprovalRule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -65,17 +61,6 @@ export function ApprovalRulesPage() {
     setPageIndex(0);
   };
 
-  const onImport = async (file: File) => {
-    const buffer = await file.arrayBuffer();
-    const parsed = parseApprovalWorkbook(buffer);
-    if (parsed.errors.length) {
-      toast.error(parsed.errors.join("；"));
-      return;
-    }
-    importApprovalRules(parsed.rules);
-    setPageIndex(0);
-  };
-
   const deletingRule = approvalRules.find((item) => item.id === deleteId) ?? null;
   const usedCount = deletingRule?.matchedCountT1 ?? 0;
   const deletingInUse = usedCount > 0;
@@ -91,24 +76,6 @@ export function ApprovalRulesPage() {
           <h1 className="mt-1 text-xl font-semibold tracking-tight">审批单规则</h1>
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-4">
-          <a href={APPROVAL_TEMPLATE_PATH} download>
-            <Button variant="secondary">下载模板</Button>
-          </a>
-          <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-            <FileSpreadsheet className="h-4 w-4" />
-            导入 Excel
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void onImport(file);
-              event.target.value = "";
-            }}
-          />
           <Button onClick={() => setEditing("new")}>
             <Plus className="h-4 w-4" />
             新增规则
@@ -127,7 +94,7 @@ export function ApprovalRulesPage() {
               </SelectContent>
             </Select>
           </FilterField>
-          <FilterField label="模板ID">
+          <FilterField label="审批单编码">
             <Input
               value={draft.templateId}
               placeholder="请输入"
@@ -175,14 +142,14 @@ export function ApprovalRulesPage() {
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         {filtered.length === 0 ? (
-          <div className="p-10"><EmptyState title="没有符合条件的审批单规则" description="请调整筛选条件后重新查询，或新增规则、导入 Excel。" /></div>
+          <div className="p-10"><EmptyState title="没有符合条件的审批单规则" description="请调整筛选条件后重新查询，或新增规则。" /></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1400px] text-left text-sm">
               <thead>
                 <tr className="bg-[#f7f8fb] text-sm text-slate-500">
                   <th className="px-3 py-3 font-medium">审批单名称</th>
-                  <th className="px-3 py-3 font-medium">模板ID</th>
+                  <th className="px-3 py-3 font-medium">审批单编码</th>
                   <th className="px-3 py-3 font-medium">付款申请类型</th>
                   <th className="px-3 py-3 font-medium">其它维度</th>
                   <th className="px-3 py-3 font-medium">一级科目</th>

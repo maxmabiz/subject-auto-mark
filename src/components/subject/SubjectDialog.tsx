@@ -53,16 +53,6 @@ export function SubjectDialog({
       <DialogContent title={title}>
         <div className="space-y-4 px-5 py-4">
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            {lockedLevel !== 1 ? (
-              <div className="space-y-1.5 col-span-2">
-                <Label>上级科目</Label>
-                <Input
-                  disabled
-                  value={lockedParent ? `${lockedParent.code} ${lockedParent.name}` : ""}
-                  className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
-                />
-              </div>
-            ) : null}
             <div className="space-y-1.5">
               <Label>科目编码 <span className="text-red-500">*</span></Label>
               <Input

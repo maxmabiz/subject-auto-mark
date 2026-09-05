@@ -31,7 +31,7 @@ function toRule(input: {
 }): ApprovalRule {
   const errors: string[] = [];
   if (isBlank(input.approvalName)) errors.push("飞书审批单名称为空");
-  if (isBlank(input.templateId)) errors.push("模板ID为空");
+  if (isBlank(input.templateId)) errors.push("审批单编码为空");
   if (isBlank(input.paymentType)) errors.push("付款申请类型为空");
   const validationStatus = errors.length ? "error" : input.level1 ? "valid" : "warning";
   if (!input.level1 && !errors.length) errors.push("未配置科目，匹配时回退渠道规则");
