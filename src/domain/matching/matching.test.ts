@@ -180,6 +180,42 @@ describe("matching engine", () => {
     expect(hit.subject).toEqual(restrictedSubject);
   });
 
+  it("条件关闭模糊匹配时交易描述改为完全匹配", () => {
+    const exactDesc = rule({
+      id: "R-FUZZY-OFF",
+      searchField: "交易描述",
+      keyword: "shopify",
+      conditions: [{ searchField: "交易描述", keyword: "shopify", fuzzy: false }],
+      subject: ecommerceSubject,
+    });
+    const miss = matchChannelRules(tx({ id: "fuzzy-off-1", transactionDescription: "shopify payout" }), [exactDesc]);
+    const hit = matchChannelRules(tx({ id: "fuzzy-off-2", transactionDescription: "shopify" }), [exactDesc]);
+    expect(miss.status).toBe("unmatched");
+    expect(hit.status).toBe("matched");
+  });
+
+  it("条件开启模糊匹配时 code 类型改为包含匹配", () => {
+    const fuzzyCode = rule({
+      id: "R-FUZZY-ON",
+      platform: "Paypal",
+      account: "PayPal-A01",
+      searchField: "code 类型",
+      keyword: "准备金冻结",
+      conditions: [{ searchField: "code 类型", keyword: "准备金冻结", fuzzy: true }],
+      subject: restrictedSubject,
+    });
+    const hit = matchChannelRules(
+      tx({
+        id: "fuzzy-on-1",
+        platform: "Paypal",
+        account: "PayPal-A01",
+        codeType: "准备金冻结-额外说明",
+      }),
+      [fuzzyCode],
+    );
+    expect(hit.status).toBe("matched");
+  });
+
   it("具体账号优先于所有账户", () => {
     const result = matchChannelRules(
       tx({

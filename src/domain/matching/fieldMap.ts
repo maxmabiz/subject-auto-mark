@@ -30,6 +30,16 @@ export function getMatchMode(searchField: string): MatchMode | null {
   return null;
 }
 
+/** 条件上显式配置优先；未配置时沿用字段旧规则，再缺省为包含（模糊=是）。 */
+export function conditionMatchMode(condition: { searchField: string; fuzzy?: boolean }): MatchMode {
+  if (typeof condition.fuzzy === "boolean") return condition.fuzzy ? "contains" : "exact";
+  return getMatchMode(condition.searchField) ?? "contains";
+}
+
+export function defaultFuzzy(searchField = ""): boolean {
+  return conditionMatchMode({ searchField }) === "contains";
+}
+
 export function getTransactionFieldValue(
   transaction: Transaction,
   searchField: string,

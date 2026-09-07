@@ -10,7 +10,7 @@ import { ChannelRuleDialog } from "@/components/rules/ChannelRuleDialog";
 import { ChannelRuleLogDrawer } from "@/components/rules/ChannelRuleLogDrawer";
 import { displayPlatform } from "@/domain/constants";
 import { formatSubject } from "@/domain/matching";
-import { formatRuleConditions, ruleConditions } from "@/domain/channel/match";
+import { formatRuleCondition, formatRuleConditions, ruleConditions } from "@/domain/channel/match";
 import type { Rule } from "@/domain/types";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -281,7 +281,7 @@ function ConditionCell({ rule }: { rule: Rule }) {
   const items = ruleConditions(rule);
   if (!items.length) return <span className="text-slate-400">—</span>;
   const full = formatRuleConditions(rule);
-  const pair = (item: { searchField: string; keyword: string }) => `${item.searchField || "—"}=${item.keyword || "—"}`;
+  const pair = (item: { searchField: string; keyword: string; fuzzy?: boolean }) => formatRuleCondition(item);
 
   if (items.length === 1) {
     return <span className="whitespace-nowrap text-slate-700" title={full}>{pair(items[0])}</span>;

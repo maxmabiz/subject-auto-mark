@@ -1,5 +1,5 @@
 import type { Rule, RuleCondition } from "../types";
-import { getMatchMode, isSearchFieldSupported } from "../matching/fieldMap";
+import { conditionMatchMode, isSearchFieldSupported } from "../matching/fieldMap";
 import { isBlank } from "../matching/normalize";
 import { ruleConditionKeys, ruleConditions } from "./match";
 
@@ -25,7 +25,7 @@ export function hydrateChannelRule(rule: Rule): Rule {
     searchField: first.searchField,
     keyword: first.keyword,
     conditions,
-    matchMode: first.searchField ? getMatchMode(first.searchField) : rule.matchMode ?? null,
+    matchMode: first.searchField ? conditionMatchMode(first) : rule.matchMode ?? null,
     createdAt: rule.createdAt || INIT_TIME,
     updatedAt: rule.updatedAt || rule.createdAt || INIT_TIME,
     matchedCountT1: rule.createdAt ? (rule.matchedCountT1 ?? 0) : mockChannelMatchedCount({ ...rule, keyword: first.keyword }),
@@ -55,7 +55,11 @@ export function buildChannelRule(input: {
   const rawConditions = (input.conditions?.length
     ? input.conditions
     : [{ searchField: input.searchField ?? "", keyword: input.keyword ?? "" }]
-  ).map((item) => ({ searchField: item.searchField.trim(), keyword: item.keyword.trim() }));
+  ).map((item) => {
+    const next: RuleCondition = { searchField: item.searchField.trim(), keyword: item.keyword.trim() };
+    if (typeof item.fuzzy === "boolean") next.fuzzy = item.fuzzy;
+    return next;
+  });
   const conditions = rawConditions.filter((item) => item.searchField || item.keyword);
   const first = conditions[0] ?? { searchField: "", keyword: "" };
   const errors: string[] = [];
@@ -81,7 +85,7 @@ export function buildChannelRule(input: {
     keyword: first.keyword,
     conditions,
     subject: { level1, level2, level3: level3 || null },
-    matchMode: first.searchField ? getMatchMode(first.searchField) : null,
+    matchMode: first.searchField ? conditionMatchMode(first) : null,
     explicitPriority: 0,
     validationStatus: errors.length ? "error" : "valid",
     errors: [...new Set(errors)],

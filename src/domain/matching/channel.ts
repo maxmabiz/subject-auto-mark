@@ -5,7 +5,7 @@ import type {
   SubjectPath,
   Transaction,
 } from "../types";
-import { ALL_ACCOUNT_LABEL, getMatchMode, getTransactionFieldValue } from "./fieldMap";
+import { ALL_ACCOUNT_LABEL, conditionMatchMode, getTransactionFieldValue } from "./fieldMap";
 import { isBlank, normalizeText, sameSubject } from "./normalize";
 import { ruleConditions } from "../channel/match";
 
@@ -17,9 +17,9 @@ function matchesKeyword(rawValue: string, keyword: string, mode: "contains" | "e
   return value.includes(needle);
 }
 
-function rankCondition(rule: Rule, searchField: string, keyword: string, transaction: Transaction): ChannelCandidate | null {
-  const mode = getMatchMode(searchField);
-  if (!mode) return null;
+function rankCondition(rule: Rule, condition: { searchField: string; keyword: string; fuzzy?: boolean }, transaction: Transaction): ChannelCandidate | null {
+  const { searchField, keyword } = condition;
+  const mode = conditionMatchMode(condition);
   const rawValue = getTransactionFieldValue(transaction, searchField);
   if (rawValue == null) return null;
   if (!matchesKeyword(rawValue, keyword, mode)) return null;
@@ -45,7 +45,7 @@ function rankCondition(rule: Rule, searchField: string, keyword: string, transac
 function candidateRank(rule: Rule, transaction: Transaction): ChannelCandidate | null {
   let best: ChannelCandidate | null = null;
   for (const condition of ruleConditions(rule)) {
-    const candidate = rankCondition(rule, condition.searchField, condition.keyword, transaction);
+    const candidate = rankCondition(rule, condition, transaction);
     if (!candidate) continue;
     if (!best || compareCandidates(candidate, best) < 0) best = candidate;
   }

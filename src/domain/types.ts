@@ -65,6 +65,8 @@ export interface Transaction {
 export interface RuleCondition {
   searchField: string;
   keyword: string;
+  /** 是否模糊匹配（包含）。缺省时按检索字段旧规则：交易描述/备注为是，其余为否。 */
+  fuzzy?: boolean;
 }
 
 export interface Rule {

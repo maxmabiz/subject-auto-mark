@@ -6,6 +6,8 @@ export {
   EXACT_FIELDS,
   ALL_ACCOUNT_LABEL,
   getMatchMode,
+  conditionMatchMode,
+  defaultFuzzy,
   getTransactionFieldValue,
   isSearchFieldSupported,
 } from "./fieldMap";
